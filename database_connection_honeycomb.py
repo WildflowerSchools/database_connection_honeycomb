@@ -84,14 +84,26 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             """
             query getEnvironment ($environment_id: ID!) {
               getEnvironment(environment_id: $environment_id) {
+                environment_id
+                name
+                description
+                location
                 assignments {
                   assignment_id
                   start
                   end
+                  assigned_type
                   assigned {
                     ... on Device {
                       device_id
                       part_number
+                      name
+                      tag_id
+                      description
+                    }
+                    ... on Person {
+                      person_id
+                      name
                     }
                   }
                 }
