@@ -1,6 +1,7 @@
 from database_connection import DatabaseConnection
 from database_connection import DataQueue
 import honeycomb
+import dateutil.parser
 import os
 
 class DatabaseConnectionHoneycomb(DatabaseConnection):
@@ -11,8 +12,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         self,
         environment_name_honeycomb,
         timestamp_field_name_input = None,
-        timestamp_field_name_honeycomb = None,
         object_id_field_name_input = None,
+        object_type_honeycomb = None,
         object_id_field_name_honeycomb = None,
         honeycomb_uri = None,
         honeycomb_token_uri = None,
@@ -46,8 +47,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         """
         self.environment_name_honeycomb = environment_name_honeycomb
         self.timestamp_field_name_input = timestamp_field_name_input
-        self.timestamp_field_name_honeycomb = timestamp_field_name_honeycomb
         self.object_id_field_name_input = object_id_field_name_input
+        self.object_type_honeycomb = object_type_honeycomb
         self.object_id_field_name_honeycomb = object_id_field_name_honeycomb
         if honeycomb_uri is None:
             honeycomb_uri = os.getenv('HONEYCOMB_URI')
@@ -111,3 +112,37 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             }
             """,
             {"environment_id": environment_id}).get("getEnvironment")
+
+    def lookup_assignment_id(
+        self,
+        timestamp,
+        object_id
+    ):
+        """
+        Look up the Honeycomb assignment ID for a given timestamp and object ID.
+
+        Parameters:
+            timestamp (string): Datetime at which we wish to know the assignment (as ISO-format string)
+            object_id (string): Object ID for which we wish to know the assignment
+
+        Returns:
+            (string): Honeycomb assignment ID
+        """
+        for assignment in self.environment.get('assignments'):
+            if assignment.get('assigned_type') != self.object_type_honeycomb:
+                continue
+            if assignment.get('assigned').get(self.object_id_field_name_honeycomb) != object_id:
+                continue
+            timestamp_datetime = dateutil.parser.parse(timestamp)
+            start = assignment.get('start')
+            if start is not None and timestamp_datetime < dateutil.parser.parse(start):
+                continue
+            end = assignment.get('end')
+            if end is not None and timestamp_datetime > dateutil.parser.parse(end):
+                continue
+            return assignment.get('assignment_id')
+        print('No assignment found for {} at {}'.format(
+            object_id,
+            timestamp
+        ))
+        return None
