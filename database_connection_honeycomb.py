@@ -4,7 +4,7 @@ import honeycomb
 import dateutil.parser
 import os
 
-class DatabaseConnectionHoneycomb(DatabaseConnection):
+class DatabaseConnectionHoneycombTimeSeries(DatabaseConnection):
     """
     Class to define a DatabaseConnection to Wildflower's Honeycomb database
     """
@@ -146,3 +146,24 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             timestamp
         ))
         return None
+
+    def fetch_assignment_ids(
+        self,
+        start_time = None,
+        end_time = None,
+        object_ids = None
+    ):
+        relevant_assignment_ids = []
+        for assignment in self.environment.get('assignments'):
+            if assignment.get('assigned_type') != self.object_type_honeycomb:
+                continue
+            if object_ids is not None and assignment.get('assigned').get(self.object_id_field_name_honeycomb) not in object_ids:
+                continue
+            assignment_end = assignment.get('end')
+            if start_time is not None and assignment_end is not None and dateutil.parser.parse(start_time) > dateutil.parser.parse(assignment_end):
+                continue
+            assignment_start = assignment.get('start')
+            if end_time is not None and assignment_start is not None and dateutil.parser.parse(end_time) < dateutil.parser.parse(assignment_start):
+                continue
+            relevant_assignment_ids.append(assignment.get('assignment_id'))
+        return relevant_assignment_ids
