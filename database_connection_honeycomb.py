@@ -3,6 +3,7 @@ from database_connection import DataQueue
 import honeycomb
 import datetime
 import dateutil.parser
+import json
 import os
 
 class DatabaseConnectionHoneycombTimeSeries(DatabaseConnection):
@@ -187,7 +188,22 @@ class DatabaseConnectionHoneycombTimeSeries(DatabaseConnection):
         )
         query_string = fetch_data_time_series_query_string(query_expression_string)
         query_results = self.honeycomb_client.query.query(query_string, variables = {})
-        return query_results
+        data = []
+        for query_results_datum in query_results.get('findDatapoints').get('data'):
+            datum = {}
+            datum.update({'timestamp': query_results_datum.get('observed_time')})
+            datum.update({'environment_name': query_results_datum.get('observer', {}).get('environment', {}).get('name')})
+            datum.update(query_results_datum.get('observer', {}).get('assigned', {}))
+            datum.update({'content_type': query_results_datum.get('file', {}).get('contentType')})
+            data_string = query_results_datum.get('file', {}).get('data')
+            datum.update({'data_string': data_string})
+            try:
+                data_dict = json.loads(data_string)
+                datum.update(data_dict)
+            except:
+                pass
+            data.append(datum)
+        return data
 
 def datetime_honeycomb_string(datetime_string):
     datetime_parsed = dateutil.parser.parse(datetime_string)
