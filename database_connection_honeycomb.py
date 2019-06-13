@@ -1,6 +1,7 @@
 from database_connection import DatabaseConnection
 from database_connection import DataQueue
 import honeycomb
+import datetime
 import dateutil.parser
 import os
 
@@ -167,3 +168,135 @@ class DatabaseConnectionHoneycombTimeSeries(DatabaseConnection):
                 continue
             relevant_assignment_ids.append(assignment.get('assignment_id'))
         return relevant_assignment_ids
+
+    def fetch_data_time_series(
+        self,
+        start_time = None,
+        end_time = None,
+        object_ids = None
+    ):
+        assignment_ids = self.fetch_assignment_ids(
+            start_time,
+            end_time,
+            object_ids
+        )
+        query_expression_string = combined_query_expression_string(
+            assignment_ids,
+            start_time,
+            end_time
+        )
+        query_string = fetch_data_time_series_query_string(query_expression_string)
+        query_results = self.honeycomb_client.query.query(query_string, variables = {})
+        return query_results
+
+def datetime_honeycomb_string(datetime_string):
+    datetime_parsed = dateutil.parser.parse(datetime_string)
+    datetime_utc = datetime_parsed.astimezone(tz=datetime.timezone.utc)
+    datetime_honeycomb_string = datetime_utc.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+    return datetime_honeycomb_string
+
+def query_expression_string(
+    field_string = None,
+    operator_string = None,
+    value_string = None,
+    children_query_expression_string_list = None
+):
+    query_expression_string = '{'
+    if field_string is not None:
+        query_expression_string += 'field: "{}", '.format(field_string)
+    if operator_string is not None:
+        query_expression_string += 'operator: {}, '.format(operator_string)
+    if value_string is not None:
+        query_expression_string += 'value: "{}"'.format(value_string)
+    if children_query_expression_string_list is not None:
+        query_expression_string += 'children: [{}]'.format(', '.join(children_query_expression_string_list))
+    query_expression_string += '}'
+    return query_expression_string
+
+def assignment_ids_query_expression_string(assignment_ids):
+    assignment_ids_query_expression_string_list = []
+    for assignment_id in assignment_ids:
+        assigment_id_query_expression_string = query_expression_string(
+            field_string = 'observer',
+            operator_string = 'EQ',
+            value_string = assignment_id
+        )
+        assignment_ids_query_expression_string_list.append(assigment_id_query_expression_string)
+    assignment_ids_query_expression_string = query_expression_string(
+        operator_string = 'OR',
+        children_query_expression_string_list = assignment_ids_query_expression_string_list
+    )
+    return assignment_ids_query_expression_string
+
+def start_time_query_expression_string(start_time):
+    start_time_honeycomb_string = datetime_honeycomb_string(start_time)
+    start_time_query_expression_string = query_expression_string(
+        field_string = 'observed_time',
+        operator_string = 'GTE',
+        value_string = start_time_honeycomb_string
+    )
+    return start_time_query_expression_string
+
+def end_time_query_expression_string(end_time):
+    end_time_honeycomb_string = datetime_honeycomb_string(end_time)
+    end_time_query_expression_string = query_expression_string(
+        field_string = 'observed_time',
+        operator_string = 'LTE',
+        value_string = end_time_honeycomb_string
+    )
+    return end_time_query_expression_string
+
+def combined_query_expression_string(
+    assignment_ids,
+    start_time = None,
+    end_time = None
+):
+    combined_query_expression_string_list = []
+    assignment_ids_string = assignment_ids_query_expression_string(assignment_ids)
+    combined_query_expression_string_list.append(assignment_ids_string)
+    if start_time is not None:
+        start_time_string = start_time_query_expression_string(start_time)
+        combined_query_expression_string_list.append(start_time_string)
+    if end_time is not None:
+        end_time_string = end_time_query_expression_string(end_time)
+        combined_query_expression_string_list.append(end_time_string)
+    combined_query_expression_string = query_expression_string(
+        operator_string = 'AND',
+        children_query_expression_string_list = combined_query_expression_string_list
+    )
+    return combined_query_expression_string
+
+fetch_data_time_series_query_string_template = """
+query fetchDataTimeSeries {{
+  findDatapoints(query: {}) {{
+    data {{
+      observed_time
+      observer {{
+        ... on Assignment {{
+            environment {{
+                name
+            }}
+            assigned {{
+              ... on Device {{
+                part_number
+                tag_id
+              }}
+              ... on Person {{
+                name
+              }}
+            }}
+        }}
+      }}
+      file {{
+        data
+        name
+        contentType
+      }}
+    }}
+  }}
+}}
+"""
+
+def fetch_data_time_series_query_string(query_expression_string):
+    query_string = fetch_data_time_series_query_string_template.format(query_expression_string)
+    return query_string
