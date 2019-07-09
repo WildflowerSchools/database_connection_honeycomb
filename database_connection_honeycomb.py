@@ -217,6 +217,27 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             data.append(datum)
         return data
 
+    def write_data_object_time_series(
+        self,
+        timestamp,
+        object_id,
+        data_dict
+    ):
+        assignment_id = self.lookup_assignment_id_object_time_series(timestamp, object_id)
+        timestamp_honeycomb_format = datetime_honeycomb_string(timestamp)
+        data_json = json.dumps(data_dict)
+        dp = honeycomb.models.DatapointInput(
+                observer = assignment_id,
+                format = 'application/json',
+                file = honeycomb.models.S3FileInput(
+                    name = 'datapoint.json',
+                    contentType = 'application/json',
+                    data = data_json,
+                ),
+                observed_time= timestamp_honeycomb_format
+        )
+        self.honeycomb_client.mutation.createDatapoint(dp)
+
 def datetime_honeycomb_string(datetime_string):
     datetime_parsed = dateutil.parser.parse(datetime_string)
     datetime_utc = datetime_parsed.astimezone(tz=datetime.timezone.utc)
