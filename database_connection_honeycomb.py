@@ -13,8 +13,10 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
     def __init__(
         self,
         environment_name_honeycomb,
-        timestamp_field_name_input = None,
-        object_id_field_name_input = None,
+        time_series_database = True,
+        object_database = True,
+        # timestamp_field_name_input = None,
+        # object_id_field_name_input = None,
         object_type_honeycomb = None,
         object_id_field_name_honeycomb = None,
         honeycomb_uri = None,
@@ -26,30 +28,40 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         """
         Constructor for DatabaseConnectionHoneycomb.
 
-        If timestamp_field_name_input and timestamp_field_name_honeycomb are
-        specified, the database connection is assumed to be handling time series
-        data, every datapoint written to the database must contain a field with
-        the timestamp_field_name_input name, and this will enable various
-        time-related methods to access the data (e.g., fetching a time span,
-        creating an iterator that returns data points in time order).
-
-        If object_id_field_name_input and object_id_field_name_honeycomb are
-        specified, the database is assumed to be handling data associated with
-        objects (e.g., measurement devices), every datapoint written to the
-        database must contain a field with the object_id_field_name_input name,
-        and this will enable various object methods to access the data (e.g.,
-        fetching all data associated with a specific list of object IDs).
+        # If timestamp_field_name_input and timestamp_field_name_honeycomb are
+        # specified, the database connection is assumed to be handling time series
+        # data, every datapoint written to the database must contain a field with
+        # the timestamp_field_name_input name, and this will enable various
+        # time-related methods to access the data (e.g., fetching a time span,
+        # creating an iterator that returns data points in time order).
+        #
+        # If object_id_field_name_input and object_id_field_name_honeycomb are
+        # specified, the database is assumed to be handling data associated with
+        # objects (e.g., measurement devices), every datapoint written to the
+        # database must contain a field with the object_id_field_name_input name,
+        # and this will enable various object methods to access the data (e.g.,
+        # fetching all data associated with a specific list of object IDs).
 
         Parameters:
+            time_series_database (bool): TBD
+            object_database (bool): TBD
             environment_name_honeycomb (string): Name of the environment that the data should be associated with
-            timestamp_field_name_input (string): Name of the input field containing the timestamp for each datapoint
-            timestamp_field_name_honeycomb (string): Name of the Honeycomb field containing the timestamp for each datapoint
-            object_id_field_name_input (string): Name of the input field containing the object ID for each datapoint
-            object_id_field_name_honeycomb (string): Name of the Honeycomb field containing the object ID for each datapoint
+            # timestamp_field_name_input (string): Name of the input field containing the timestamp for each datapoint
+            # timestamp_field_name_honeycomb (string): Name of the Honeycomb field containing the timestamp for each datapoint
+            # object_id_field_name_input (string): Name of the input field containing the object ID for each datapoint
+            object_type_honeycomb (string): TBD
+            object_id_field_name_honeycomb (string): TBD
+            honeycomb_uri (string): TBD
+            honeycomb_token_uri (string): TBD
+            honeycomb_audience (string): TBD
+            honeycomb_client_id (string): TBD
+            honeycomb_client_secret (string): TBD
         """
+        self.time_series_database = time_series_database
+        self.object_database = object_database
         self.environment_name_honeycomb = environment_name_honeycomb
-        self.timestamp_field_name_input = timestamp_field_name_input
-        self.object_id_field_name_input = object_id_field_name_input
+        # self.timestamp_field_name_input = timestamp_field_name_input
+        # self.object_id_field_name_input = object_id_field_name_input
         self.object_type_honeycomb = object_type_honeycomb
         self.object_id_field_name_honeycomb = object_id_field_name_honeycomb
         if honeycomb_uri is None:
