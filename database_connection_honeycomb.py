@@ -127,7 +127,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             """,
             {"environment_id": environment_id}).get("getEnvironment")
 
-    def lookup_assignment_id(
+    def lookup_assignment_id_object_time_series(
         self,
         timestamp,
         object_id
@@ -161,7 +161,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         ))
         return None
 
-    def fetch_assignment_ids(
+    def fetch_assignment_ids_object_time_series(
         self,
         start_time = None,
         end_time = None,
@@ -182,13 +182,13 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             relevant_assignment_ids.append(assignment.get('assignment_id'))
         return relevant_assignment_ids
 
-    def fetch_data_time_series(
+    def fetch_data_object_time_series(
         self,
         start_time = None,
         end_time = None,
         object_ids = None
     ):
-        assignment_ids = self.fetch_assignment_ids(
+        assignment_ids = self.fetch_assignment_ids_object_time_series(
             start_time,
             end_time,
             object_ids
@@ -198,7 +198,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             start_time,
             end_time
         )
-        query_string = fetch_data_time_series_query_string(query_expression_string)
+        query_string = fetch_data_object_time_series_query_string(query_expression_string)
         query_results = self.honeycomb_client.query.query(query_string, variables = {})
         data = []
         for query_results_datum in query_results.get('findDatapoints').get('data'):
@@ -294,7 +294,7 @@ def combined_query_expression_string(
     )
     return combined_query_expression_string
 
-fetch_data_time_series_query_string_template = """
+fetch_data_object_time_series_query_string_template = """
 query fetchDataTimeSeries {{
   findDatapoints(query: {}) {{
     data {{
@@ -325,6 +325,6 @@ query fetchDataTimeSeries {{
 }}
 """
 
-def fetch_data_time_series_query_string(query_expression_string):
-    query_string = fetch_data_time_series_query_string_template.format(query_expression_string)
+def fetch_data_object_time_series_query_string(query_expression_string):
+    query_string = fetch_data_object_time_series_query_string_template.format(query_expression_string)
     return query_string
