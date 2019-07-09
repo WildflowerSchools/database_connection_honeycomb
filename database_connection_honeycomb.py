@@ -6,7 +6,7 @@ import dateutil.parser
 import json
 import os
 
-class DatabaseConnectionHoneycombTimeSeries(DatabaseConnection):
+class DatabaseConnectionHoneycomb(DatabaseConnection):
     """
     Class to define a DatabaseConnection to Wildflower's Honeycomb database
     """
