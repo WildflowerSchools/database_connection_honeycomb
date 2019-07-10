@@ -137,7 +137,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         Look up the Honeycomb assignment ID for a given timestamp and object ID.
 
         Parameters:
-            timestamp (string): Datetime at which we wish to know the assignment (as ISO-format string)
+            # timestamp (string): Datetime at which we wish to know the assignment (as ISO-format string)
             object_id (string): Object ID for which we wish to know the assignment
 
         Returns:
@@ -150,12 +150,12 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 continue
             if assignment.get('assigned').get(self.object_id_field_name_honeycomb) != object_id:
                 continue
-            timestamp_datetime = dateutil.parser.parse(timestamp)
+            timestamp_datetime = python_datetime_utc(timestamp)
             start = assignment.get('start')
-            if start is not None and timestamp_datetime < dateutil.parser.parse(start):
+            if start is not None and timestamp_datetime < python_datetime_utc(start):
                 continue
             end = assignment.get('end')
-            if end is not None and timestamp_datetime > dateutil.parser.parse(end):
+            if end is not None and timestamp_datetime > python_datetime_utc(end):
                 continue
             return assignment.get('assignment_id')
         print('No assignment found for {} at {}'.format(
@@ -179,10 +179,10 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             if object_ids is not None and assignment.get('assigned').get(self.object_id_field_name_honeycomb) not in object_ids:
                 continue
             assignment_end = assignment.get('end')
-            if start_time is not None and assignment_end is not None and dateutil.parser.parse(start_time) > dateutil.parser.parse(assignment_end):
+            if start_time is not None and assignment_end is not None and python_datetime_utc(start_time) >  python_datetime_utc(assignment_end):
                 continue
             assignment_start = assignment.get('start')
-            if end_time is not None and assignment_start is not None and dateutil.parser.parse(end_time) < dateutil.parser.parse(assignment_start):
+            if end_time is not None and assignment_start is not None and python_datetime_utc(end_time) <  python_datetime_utc(assignment_start):
                 continue
             relevant_assignment_ids.append(assignment.get('assignment_id'))
         return relevant_assignment_ids
@@ -247,9 +247,22 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         )
         self.honeycomb_client.mutation.createDatapoint(dp)
 
-def datetime_honeycomb_string(datetime_string):
-    datetime_parsed = dateutil.parser.parse(datetime_string)
-    datetime_utc = datetime_parsed.astimezone(tz=datetime.timezone.utc)
+def python_datetime_utc(timestamp):
+    try:
+        if timestamp.tzinfo is None:
+            datetime_utc = timestamp.replace(tzinfo = datetime.timezone.utc)
+        else:
+            datetime_utc = timestamp.astimezone(tz=datetime.timezone.utc)
+    except:
+        datetime_parsed = dateutil.parser.parse(timestamp)
+        if datetime_parsed.tzinfo is None:
+            datetime_utc = datetime_parsed.replace(tzinfo = datetime.timezone.utc)
+        else:
+            datetime_utc = datetime_parsed.astimezone(tz=datetime.timezone.utc)
+    return datetime_utc
+
+def datetime_honeycomb_string(timestamp):
+    datetime_utc = python_datetime_utc(timestamp)
     datetime_honeycomb_string = datetime_utc.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
     return datetime_honeycomb_string
 
