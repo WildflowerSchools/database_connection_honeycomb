@@ -210,12 +210,10 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         data = []
         for query_results_datum in query_results.get('findDatapoints').get('data'):
             datum = {}
-            datum.update({'timestamp': query_results_datum.get('observed_time')})
+            datum.update({'timestamp': python_datetime_utc(query_results_datum.get('observed_time'))})
             datum.update({'environment_name': query_results_datum.get('observer', {}).get('environment', {}).get('name')})
-            datum.update(query_results_datum.get('observer', {}).get('assigned', {}))
-            datum.update({'content_type': query_results_datum.get('file', {}).get('contentType')})
+            datum.update({'object_id': query_results_datum.get('observer', {}).get('assigned', {}).get(self.object_id_field_name_honeycomb)})
             data_string = query_results_datum.get('file', {}).get('data')
-            datum.update({'data_string': data_string})
             try:
                 data_dict = json.loads(data_string)
                 datum.update(data_dict)
