@@ -243,7 +243,21 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 ),
                 observed_time= timestamp_honeycomb_format
         )
-        self.honeycomb_client.mutation.createDatapoint(dp)
+        output = self.honeycomb_client.mutation.createDatapoint(dp)
+        data_id = output.data_id
+        return data_id
+
+    def delete_datapoint(self, data_id):
+        status = self.honeycomb_client.query.query(
+            """
+            mutation deleteSingleDatapoint ($data_id: ID!) {
+              deleteDatapoint(data_id: $data_id) {
+                status
+              }
+            }
+            """,
+            {"data_id": data_id}).get("deleteSingleDatapoint", {}).get('status')
+        return status
 
 def python_datetime_utc(timestamp):
     try:
