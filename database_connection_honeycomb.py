@@ -12,11 +12,9 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
     """
     def __init__(
         self,
-        environment_name_honeycomb,
         time_series_database = True,
         object_database = True,
-        # timestamp_field_name_input = None,
-        # object_id_field_name_input = None,
+        environment_name_honeycomb = None,
         object_type_honeycomb = None,
         object_id_field_name_honeycomb = None,
         honeycomb_uri = None,
@@ -57,11 +55,11 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             honeycomb_client_id (string): TBD
             honeycomb_client_secret (string): TBD
         """
+        if time_series_database and object_database and environment_name_honeycomb is None:
+            raise ValueError('Honeycomb environment name must be specified for object time series database')
         self.time_series_database = time_series_database
         self.object_database = object_database
         self.environment_name_honeycomb = environment_name_honeycomb
-        # self.timestamp_field_name_input = timestamp_field_name_input
-        # self.object_id_field_name_input = object_id_field_name_input
         self.object_type_honeycomb = object_type_honeycomb
         self.object_id_field_name_honeycomb = object_id_field_name_honeycomb
         if honeycomb_uri is None:
@@ -93,39 +91,40 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 'client_secret': honeycomb_client_secret,
             }
         )
-        environments = self.honeycomb_client.query.findEnvironment(name = self.environment_name_honeycomb)
-        environment_id = environments.data[0].get('environment_id')
-        self.environment = self.honeycomb_client.query.query(
-            """
-            query getEnvironment ($environment_id: ID!) {
-              getEnvironment(environment_id: $environment_id) {
-                environment_id
-                name
-                description
-                location
-                assignments {
-                  assignment_id
-                  start
-                  end
-                  assigned_type
-                  assigned {
-                    ... on Device {
-                      device_id
-                      part_number
-                      name
-                      tag_id
-                      description
-                    }
-                    ... on Person {
-                      person_id
-                      name
+        if self.environment_name_honeycomb is not None:
+            environments = self.honeycomb_client.query.findEnvironment(name = self.environment_name_honeycomb)
+            environment_id = environments.data[0].get('environment_id')
+            self.environment = self.honeycomb_client.query.query(
+                """
+                query getEnvironment ($environment_id: ID!) {
+                  getEnvironment(environment_id: $environment_id) {
+                    environment_id
+                    name
+                    description
+                    location
+                    assignments {
+                      assignment_id
+                      start
+                      end
+                      assigned_type
+                      assigned {
+                        ... on Device {
+                          device_id
+                          part_number
+                          name
+                          tag_id
+                          description
+                        }
+                        ... on Person {
+                          person_id
+                          name
+                        }
+                      }
                     }
                   }
                 }
-              }
-            }
-            """,
-            {"environment_id": environment_id}).get("getEnvironment")
+                """,
+                {"environment_id": environment_id}).get("getEnvironment")
 
     def lookup_assignment_id_object_time_series(
         self,
@@ -142,6 +141,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         Returns:
             (string): Honeycomb assignment ID
         """
+        if not self.time_series_database or not self.object_database or self.environment_name_honeycomb is None:
+            raise ValueError('Assignment ID lookup only enabled for object time series databases with Honeycomb environment specified')
         for assignment in self.environment.get('assignments'):
             if assignment.get('assigned_type') != self.object_type_honeycomb:
                 continue
@@ -167,6 +168,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         end_time = None,
         object_ids = None
     ):
+        if not self.time_series_database or not self.object_database or self.environment_name_honeycomb is None:
+            raise ValueError('Assignment ID lookup only enabled for object time series databases with Honeycomb environment specified')
         relevant_assignment_ids = []
         for assignment in self.environment.get('assignments'):
             if assignment.get('assigned_type') != self.object_type_honeycomb:
@@ -188,6 +191,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         end_time = None,
         object_ids = None
     ):
+        if not self.time_series_database or not self.object_database:
+            raise ValueError('Fetching data by time interval and/or object ID only enabled for object time series databases')
         assignment_ids = self.fetch_assignment_ids_object_time_series(
             start_time,
             end_time,
@@ -223,6 +228,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         object_id,
         data_dict
     ):
+        if not self.time_series_database or not self.object_database:
+            raise ValueError('Writing data by timestamp and object ID only enabled for object time series databases')
         assignment_id = self.lookup_assignment_id_object_time_series(timestamp, object_id)
         timestamp_honeycomb_format = datetime_honeycomb_string(timestamp)
         data_json = json.dumps(data_dict)
