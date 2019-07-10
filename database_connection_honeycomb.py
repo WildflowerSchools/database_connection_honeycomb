@@ -55,6 +55,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             honeycomb_client_id (string): TBD
             honeycomb_client_secret (string): TBD
         """
+        if not time_series_database and not object_database:
+            raise ValueError('Database must be a time series database, an object database, or an object time series database')
         if time_series_database and object_database and environment_name_honeycomb is None:
             raise ValueError('Honeycomb environment name must be specified for object time series database')
         self.time_series_database = time_series_database
