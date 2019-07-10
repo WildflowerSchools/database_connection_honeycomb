@@ -187,14 +187,14 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             relevant_assignment_ids.append(assignment.get('assignment_id'))
         return relevant_assignment_ids
 
-    def fetch_data_object_time_series(
+    def fetch_datapoints_object_time_series(
         self,
         start_time = None,
         end_time = None,
         object_ids = None
     ):
         if not self.time_series_database or not self.object_database:
-            raise ValueError('Fetching data by time interval and/or object ID only enabled for object time series databases')
+            raise ValueError('Fetching datapoints by time interval and/or object ID only enabled for object time series databases')
         assignment_ids = self.fetch_assignment_ids_object_time_series(
             start_time,
             end_time,
@@ -207,13 +207,29 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         )
         query_string = fetch_data_object_time_series_query_string(query_expression_string)
         query_results = self.honeycomb_client.query.query(query_string, variables = {})
+        datapoints = query_results.get('findDatapoints').get('data')
+        return datapoints
+
+    def fetch_data_object_time_series(
+        self,
+        start_time = None,
+        end_time = None,
+        object_ids = None
+    ):
+        if not self.time_series_database or not self.object_database:
+            raise ValueError('Fetching data by time interval and/or object ID only enabled for object time series databases')
+        datapoints = self.fetch_datapoints_object_time_series(
+            start_time,
+            end_time,
+            object_ids
+        )
         data = []
-        for query_results_datum in query_results.get('findDatapoints').get('data'):
+        for datapoint in datapoints:
             datum = {}
-            datum.update({'timestamp': python_datetime_utc(query_results_datum.get('observed_time'))})
-            datum.update({'environment_name': query_results_datum.get('observer', {}).get('environment', {}).get('name')})
-            datum.update({'object_id': query_results_datum.get('observer', {}).get('assigned', {}).get(self.object_id_field_name_honeycomb)})
-            data_string = query_results_datum.get('file', {}).get('data')
+            datum.update({'timestamp': python_datetime_utc(datapoint.get('observed_time'))})
+            datum.update({'environment_name': datapoint.get('observer', {}).get('environment', {}).get('name')})
+            datum.update({'object_id': datapoint.get('observer', {}).get('assigned', {}).get(self.object_id_field_name_honeycomb)})
+            data_string = datapoint.get('file', {}).get('data')
             try:
                 data_dict = json.loads(data_string)
                 datum.update(data_dict)
@@ -221,6 +237,24 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 pass
             data.append(datum)
         return data
+
+    def fetch_data_ids_object_time_series(
+        self,
+        start_time = None,
+        end_time = None,
+        object_ids = None
+    ):
+        if not self.time_series_database or not self.object_database:
+            raise ValueError('Fetching data IDs by time interval and/or object ID only enabled for object time series databases')
+        datapoints = self.fetch_datapoints_object_time_series(
+            start_time,
+            end_time,
+            object_ids
+        )
+        data_ids = []
+        for datapoint in datapoints:
+            data_ids.append(datapoint.get('data_id'))
+        return data_ids
 
     def write_data_object_time_series(
         self,
@@ -258,6 +292,10 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             """,
             {"data_id": data_id}).get("deleteSingleDatapoint", {}).get('status')
         return status
+
+    def delete_datapoints(self, data_ids):
+        statuses = [self.delete_datapoint(data_id) for data_id in data_ids]
+        return statuses
 
 def python_datetime_utc(timestamp):
     try:
@@ -353,6 +391,7 @@ fetch_data_object_time_series_query_string_template = """
 query fetchDataTimeSeries {{
   findDatapoints(query: {}) {{
     data {{
+      data_id
       observed_time
       observer {{
         ... on Assignment {{
