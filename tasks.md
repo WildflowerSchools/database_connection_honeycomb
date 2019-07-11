@@ -1,7 +1,5 @@
 # To do
 
-* Align parent and sibling classes
-* Add DataQueue functionality to parent class
 * Write tests for object time series database
 * Use Honeycomb functionality to look up assignment by time rather than comparing times
 * Use Honeycomb models/SDK instead of constructing raw queries/mutations
