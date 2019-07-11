@@ -1,6 +1,5 @@
 # To do
 
-* Add ability to delete record by start, end, and object IDs
 * Write docstrings
 * Align parent and sibling classes
 * Add DataQueue functionality to parent class

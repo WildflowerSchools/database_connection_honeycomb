@@ -216,6 +216,41 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             data.append(datum)
         return data
 
+    def delete_data_object_time_series(
+        self,
+        start_time,
+        end_time,
+        object_ids
+    ):
+        if not self.time_series_database or not self.object_database:
+            raise ValueError('Fetching data by time interval and/or object ID only enabled for object time series databases')
+        if start_time is None:
+            raise ValueError('Start time must be specified for delete data operation')
+        if end_time is None:
+            raise ValueError('End time must be specified for delete data operation')
+        if object_ids is None:
+            raise ValueError('Object IDs must be specified for delete data operation')
+        start_time = self._python_datetime_utc(start_time)
+        end_time = self._python_datetime_utc(end_time)
+        self._delete_data_object_time_series(
+            start_time,
+            end_time,
+            object_ids
+        )
+
+    def _delete_data_object_time_series(
+        self,
+        start_time,
+        end_time,
+        object_ids
+    ):
+        data_ids = self._fetch_data_ids_object_time_series(
+            start_time,
+            end_time,
+            object_ids
+        )
+        self._delete_datapoints(data_ids)
+
     def _delete_datapoints(self, data_ids):
         statuses = [self._delete_datapoint(data_id) for data_id in data_ids]
         return statuses
