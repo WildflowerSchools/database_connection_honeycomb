@@ -1,6 +1,5 @@
 # To do
 
-* Move all functions inside classe
 * Add ability to delete record by start, end, and object IDs
 * Write docstrings
 * Align parent and sibling classes

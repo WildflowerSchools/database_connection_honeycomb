@@ -140,7 +140,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
     ):
         if not self.time_series_database or not self.object_database:
             raise ValueError('Writing data by timestamp and object ID only enabled for object time series databases')
-        timestamp = _python_datetime_utc(timestamp)
+        timestamp = self._python_datetime_utc(timestamp)
         data_id = self._write_data_object_time_series(
             timestamp,
             object_id,
@@ -155,7 +155,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         data_dict
     ):
         assignment_id = self._lookup_assignment_id_object_time_series(timestamp, object_id)
-        timestamp_honeycomb_format = _datetime_honeycomb_string(timestamp)
+        timestamp_honeycomb_format = self._datetime_honeycomb_string(timestamp)
         data_json = json.dumps(data_dict)
         dp = honeycomb.models.DatapointInput(
                 observer = assignment_id,
@@ -180,9 +180,9 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         if not self.time_series_database or not self.object_database:
             raise ValueError('Fetching data by time interval and/or object ID only enabled for object time series databases')
         if start_time is not None:
-            start_time = _python_datetime_utc(start_time)
+            start_time = self._python_datetime_utc(start_time)
         if end_time is not None:
-            end_time = _python_datetime_utc(end_time)
+            end_time = self._python_datetime_utc(end_time)
         data = self._fetch_data_object_time_series(
             start_time,
             end_time,
@@ -204,7 +204,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         data = []
         for datapoint in datapoints:
             datum = {}
-            datum.update({'timestamp': _python_datetime_utc(datapoint.get('observed_time'))})
+            datum.update({'timestamp': self._python_datetime_utc(datapoint.get('observed_time'))})
             datum.update({'environment_name': datapoint.get('observer', {}).get('environment', {}).get('name')})
             datum.update({'object_id': datapoint.get('observer', {}).get('assigned', {}).get(self.object_id_field_name_honeycomb)})
             data_string = datapoint.get('file', {}).get('data')
@@ -254,12 +254,12 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 continue
             if assignment.get('assigned').get(self.object_id_field_name_honeycomb) != object_id:
                 continue
-            timestamp_datetime = _python_datetime_utc(timestamp)
+            timestamp_datetime = self._python_datetime_utc(timestamp)
             start = assignment.get('start')
-            if start is not None and timestamp_datetime < _python_datetime_utc(start):
+            if start is not None and timestamp_datetime < self._python_datetime_utc(start):
                 continue
             end = assignment.get('end')
-            if end is not None and timestamp_datetime > _python_datetime_utc(end):
+            if end is not None and timestamp_datetime > self._python_datetime_utc(end):
                 continue
             return assignment.get('assignment_id')
         print('No assignment found for {} at {}'.format(
@@ -283,10 +283,10 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             if object_ids is not None and assignment.get('assigned').get(self.object_id_field_name_honeycomb) not in object_ids:
                 continue
             assignment_end = assignment.get('end')
-            if start_time is not None and assignment_end is not None and _python_datetime_utc(start_time) >  _python_datetime_utc(assignment_end):
+            if start_time is not None and assignment_end is not None and self._python_datetime_utc(start_time) >  self._python_datetime_utc(assignment_end):
                 continue
             assignment_start = assignment.get('start')
-            if end_time is not None and assignment_start is not None and _python_datetime_utc(end_time) <  _python_datetime_utc(assignment_start):
+            if end_time is not None and assignment_start is not None and self._python_datetime_utc(end_time) <  self._python_datetime_utc(assignment_start):
                 continue
             relevant_assignment_ids.append(assignment.get('assignment_id'))
         return relevant_assignment_ids
@@ -322,137 +322,139 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             end_time,
             object_ids
         )
-        query_expression_string = _combined_query_expression_string(
+        query_expression_string = self._combined_query_expression_string(
             assignment_ids,
             start_time,
             end_time
         )
-        query_string = _fetch_datapoints_object_time_series_query_string(query_expression_string)
+        query_string = self._fetch_datapoints_object_time_series_query_string(query_expression_string)
         query_results = self.honeycomb_client.query.query(query_string, variables = {})
         datapoints = query_results.get('findDatapoints').get('data')
         return datapoints
 
-def _python_datetime_utc(timestamp):
-    try:
-        if timestamp.tzinfo is None:
-            datetime_utc = timestamp.replace(tzinfo = datetime.timezone.utc)
-        else:
-            datetime_utc = timestamp.astimezone(tz=datetime.timezone.utc)
-    except:
-        datetime_parsed = dateutil.parser.parse(timestamp)
-        if datetime_parsed.tzinfo is None:
-            datetime_utc = datetime_parsed.replace(tzinfo = datetime.timezone.utc)
-        else:
-            datetime_utc = datetime_parsed.astimezone(tz=datetime.timezone.utc)
-    return datetime_utc
+    def _python_datetime_utc(self, timestamp):
+        try:
+            if timestamp.tzinfo is None:
+                datetime_utc = timestamp.replace(tzinfo = datetime.timezone.utc)
+            else:
+                datetime_utc = timestamp.astimezone(tz=datetime.timezone.utc)
+        except:
+            datetime_parsed = dateutil.parser.parse(timestamp)
+            if datetime_parsed.tzinfo is None:
+                datetime_utc = datetime_parsed.replace(tzinfo = datetime.timezone.utc)
+            else:
+                datetime_utc = datetime_parsed.astimezone(tz=datetime.timezone.utc)
+        return datetime_utc
 
-def _datetime_honeycomb_string(timestamp):
-    datetime_utc = _python_datetime_utc(timestamp)
-    _datetime_honeycomb_string = datetime_utc.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-    return _datetime_honeycomb_string
+    def _datetime_honeycomb_string(self, timestamp):
+        datetime_utc = self._python_datetime_utc(timestamp)
+        datetime_honeycomb_string = datetime_utc.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        return datetime_honeycomb_string
 
-def _query_expression_string(
-    field_string = None,
-    operator_string = None,
-    value_string = None,
-    children_query_expression_string_list = None
-):
-    query_expression_string = '{'
-    if field_string is not None:
-        query_expression_string += 'field: "{}", '.format(field_string)
-    if operator_string is not None:
-        query_expression_string += 'operator: {}, '.format(operator_string)
-    if value_string is not None:
-        query_expression_string += 'value: "{}"'.format(value_string)
-    if children_query_expression_string_list is not None:
-        query_expression_string += 'children: [{}]'.format(', '.join(children_query_expression_string_list))
-    query_expression_string += '}'
-    return query_expression_string
+    def _query_expression_string(
+        self,
+        field_string = None,
+        operator_string = None,
+        value_string = None,
+        children_query_expression_string_list = None
+    ):
+        query_expression_string = '{'
+        if field_string is not None:
+            query_expression_string += 'field: "{}", '.format(field_string)
+        if operator_string is not None:
+            query_expression_string += 'operator: {}, '.format(operator_string)
+        if value_string is not None:
+            query_expression_string += 'value: "{}"'.format(value_string)
+        if children_query_expression_string_list is not None:
+            query_expression_string += 'children: [{}]'.format(', '.join(children_query_expression_string_list))
+        query_expression_string += '}'
+        return query_expression_string
 
-def _assignment_ids_query_expression_string(assignment_ids):
-    assignment_ids_query_expression_string_list = []
-    for assignment_id in assignment_ids:
-        assigment_id_query_expression_string = _query_expression_string(
-            field_string = 'observer',
-            operator_string = 'EQ',
-            value_string = assignment_id
+    def _assignment_ids_query_expression_string(self, assignment_ids):
+        assignment_ids_query_expression_string_list = []
+        for assignment_id in assignment_ids:
+            assigment_id_query_expression_string = self._query_expression_string(
+                field_string = 'observer',
+                operator_string = 'EQ',
+                value_string = assignment_id
+            )
+            assignment_ids_query_expression_string_list.append(assigment_id_query_expression_string)
+        assignment_ids_query_expression_string = self._query_expression_string(
+            operator_string = 'OR',
+            children_query_expression_string_list = assignment_ids_query_expression_string_list
         )
-        assignment_ids_query_expression_string_list.append(assigment_id_query_expression_string)
-    assignment_ids_query_expression_string = _query_expression_string(
-        operator_string = 'OR',
-        children_query_expression_string_list = assignment_ids_query_expression_string_list
-    )
-    return assignment_ids_query_expression_string
+        return assignment_ids_query_expression_string
 
-def _start_time_query_expression_string(start_time):
-    start_time_honeycomb_string = _datetime_honeycomb_string(start_time)
-    start_time_query_expression_string = _query_expression_string(
-        field_string = 'observed_time',
-        operator_string = 'GTE',
-        value_string = start_time_honeycomb_string
-    )
-    return start_time_query_expression_string
+    def _start_time_query_expression_string(self, start_time):
+        start_time_honeycomb_string = self._datetime_honeycomb_string(start_time)
+        start_time_query_expression_string = self._query_expression_string(
+            field_string = 'observed_time',
+            operator_string = 'GTE',
+            value_string = start_time_honeycomb_string
+        )
+        return start_time_query_expression_string
 
-def _end_time_query_expression_string(end_time):
-    end_time_honeycomb_string = _datetime_honeycomb_string(end_time)
-    end_time_query_expression_string = _query_expression_string(
-        field_string = 'observed_time',
-        operator_string = 'LTE',
-        value_string = end_time_honeycomb_string
-    )
-    return end_time_query_expression_string
+    def _end_time_query_expression_string(self, end_time):
+        end_time_honeycomb_string = self._datetime_honeycomb_string(end_time)
+        end_time_query_expression_string = self._query_expression_string(
+            field_string = 'observed_time',
+            operator_string = 'LTE',
+            value_string = end_time_honeycomb_string
+        )
+        return end_time_query_expression_string
 
-def _combined_query_expression_string(
-    assignment_ids,
-    start_time = None,
-    end_time = None
-):
-    combined_query_expression_string_list = []
-    assignment_ids_string = _assignment_ids_query_expression_string(assignment_ids)
-    combined_query_expression_string_list.append(assignment_ids_string)
-    if start_time is not None:
-        start_time_string = _start_time_query_expression_string(start_time)
-        combined_query_expression_string_list.append(start_time_string)
-    if end_time is not None:
-        end_time_string = _end_time_query_expression_string(end_time)
-        combined_query_expression_string_list.append(end_time_string)
-    combined_query_expression_string = _query_expression_string(
-        operator_string = 'AND',
-        children_query_expression_string_list = combined_query_expression_string_list
-    )
-    return combined_query_expression_string
+    def _combined_query_expression_string(
+        self,
+        assignment_ids,
+        start_time = None,
+        end_time = None
+    ):
+        combined_query_expression_string_list = []
+        assignment_ids_string = self._assignment_ids_query_expression_string(assignment_ids)
+        combined_query_expression_string_list.append(assignment_ids_string)
+        if start_time is not None:
+            start_time_string = self._start_time_query_expression_string(start_time)
+            combined_query_expression_string_list.append(start_time_string)
+        if end_time is not None:
+            end_time_string = self._end_time_query_expression_string(end_time)
+            combined_query_expression_string_list.append(end_time_string)
+        combined_query_expression_string = self._query_expression_string(
+            operator_string = 'AND',
+            children_query_expression_string_list = combined_query_expression_string_list
+        )
+        return combined_query_expression_string
 
-def _fetch_datapoints_object_time_series_query_string(query_expression_string):
-    string_template = """
-        query fetchDataTimeSeries {{
-          findDatapoints(query: {}) {{
-            data {{
-              data_id
-              observed_time
-              observer {{
-                ... on Assignment {{
-                    environment {{
-                        name
+    def _fetch_datapoints_object_time_series_query_string(self, query_expression_string):
+        string_template = """
+            query fetchDataTimeSeries {{
+              findDatapoints(query: {}) {{
+                data {{
+                  data_id
+                  observed_time
+                  observer {{
+                    ... on Assignment {{
+                        environment {{
+                            name
+                        }}
+                        assigned {{
+                          ... on Device {{
+                            part_number
+                            tag_id
+                          }}
+                          ... on Person {{
+                            name
+                          }}
+                        }}
                     }}
-                    assigned {{
-                      ... on Device {{
-                        part_number
-                        tag_id
-                      }}
-                      ... on Person {{
-                        name
-                      }}
-                    }}
+                  }}
+                  file {{
+                    data
+                    name
+                    contentType
+                  }}
                 }}
               }}
-              file {{
-                data
-                name
-                contentType
-              }}
             }}
-          }}
-        }}
-        """
-    query_string = string_template.format(query_expression_string)
-    return query_string
+            """
+        query_string = string_template.format(query_expression_string)
+        return query_string
