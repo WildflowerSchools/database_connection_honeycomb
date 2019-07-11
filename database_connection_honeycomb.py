@@ -140,6 +140,20 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
     ):
         if not self.time_series_database or not self.object_database:
             raise ValueError('Writing data by timestamp and object ID only enabled for object time series databases')
+        timestamp = _python_datetime_utc(timestamp)
+        data_id = self._write_data_object_time_series(
+            timestamp,
+            object_id,
+            data_dict
+        )
+        return data_id
+
+    def _write_data_object_time_series(
+        self,
+        timestamp,
+        object_id,
+        data_dict
+    ):
         assignment_id = self._lookup_assignment_id_object_time_series(timestamp, object_id)
         timestamp_honeycomb_format = _datetime_honeycomb_string(timestamp)
         data_json = json.dumps(data_dict)
@@ -165,6 +179,23 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
     ):
         if not self.time_series_database or not self.object_database:
             raise ValueError('Fetching data by time interval and/or object ID only enabled for object time series databases')
+        if start_time is not None:
+            start_time = _python_datetime_utc(start_time)
+        if end_time is not None:
+            end_time = _python_datetime_utc(end_time)
+        data = self._fetch_data_object_time_series(
+            start_time,
+            end_time,
+            object_ids
+        )
+        return data
+
+    def _fetch_data_object_time_series(
+        self,
+        start_time,
+        end_time,
+        object_ids
+    ):
         datapoints = self._fetch_datapoints_object_time_series(
             start_time,
             end_time,

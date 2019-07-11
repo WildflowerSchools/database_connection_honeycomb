@@ -1,6 +1,5 @@
 # To do
 
-* For public functions, separate bits that apply to all interfaces
 * Move long fetch data query string inside function
 * Move all functions inside classe
 * Add ability to delete record by start, end, and object IDs
