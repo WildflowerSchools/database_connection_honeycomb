@@ -296,7 +296,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             start_time,
             end_time
         )
-        query_string = _fetch_data_object_time_series_query_string(query_expression_string)
+        query_string = _fetch_datapoints_object_time_series_query_string(query_expression_string)
         query_results = self.honeycomb_client.query.query(query_string, variables = {})
         datapoints = query_results.get('findDatapoints').get('data')
         return datapoints
@@ -391,7 +391,7 @@ def _combined_query_expression_string(
     )
     return combined_query_expression_string
 
-_fetch_data_object_time_series_query_string_template = """
+_fetch_datapoints_object_time_series_query_string_template = """
 query fetchDataTimeSeries {{
   findDatapoints(query: {}) {{
     data {{
@@ -423,6 +423,6 @@ query fetchDataTimeSeries {{
 }}
 """
 
-def _fetch_data_object_time_series_query_string(query_expression_string):
-    query_string = _fetch_data_object_time_series_query_string_template.format(query_expression_string)
+def _fetch_datapoints_object_time_series_query_string(query_expression_string):
+    query_string = _fetch_datapoints_object_time_series_query_string_template.format(query_expression_string)
     return query_string

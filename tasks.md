@@ -1,6 +1,5 @@
 # To do
 
-* Make naming more consistent (datapoint intead of data, honeycomb results instead of output)
 * For public functions, separate bits that apply to all interfaces
 * Move long fetch data query string inside function
 * Move all functions inside classe
