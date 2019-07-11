@@ -26,34 +26,36 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         """
         Constructor for DatabaseConnectionHoneycomb.
 
-        # If timestamp_field_name_input and timestamp_field_name_honeycomb are
-        # specified, the database connection is assumed to be handling time series
-        # data, every datapoint written to the database must contain a field with
-        # the timestamp_field_name_input name, and this will enable various
-        # time-related methods to access the data (e.g., fetching a time span,
-        # creating an iterator that returns data points in time order).
-        #
-        # If object_id_field_name_input and object_id_field_name_honeycomb are
-        # specified, the database is assumed to be handling data associated with
-        # objects (e.g., measurement devices), every datapoint written to the
-        # database must contain a field with the object_id_field_name_input name,
-        # and this will enable various object methods to access the data (e.g.,
-        # fetching all data associated with a specific list of object IDs).
+        If time_series_database and object_database are both True, database is
+        an object time series database (e.g., a measurement database) and
+        datapoints are identified by timestamp and object ID.
+
+        If object_database is True and time_series_database is False, database
+        is an object database (e.g., a device configuration database) and
+        datapoints are identified by object ID.
+
+        If time_series_database is True and object_database is False, behavior
+        is not defined (for now).
+
+        For an object time series database, Honeycomb environment, object type,
+        and object ID field name must be specified.
+
+        If Honeycomb access parameters (URI, token URI, audience, client ID,
+        client secret) are not specified, method will attempt to read from
+        corresponding environment variables (HONEYCOMB_URI, HONEYCOMB_TOKEN_URI,
+        HONEYCOMB_AUDIENCE, HONEYCOMB_CLIENT_ID, HONEYCOMB_CLIENT_SECRET).
 
         Parameters:
-            time_series_database (bool): TBD
-            object_database (bool): TBD
-            environment_name_honeycomb (string): Name of the environment that the data should be associated with
-            # timestamp_field_name_input (string): Name of the input field containing the timestamp for each datapoint
-            # timestamp_field_name_honeycomb (string): Name of the Honeycomb field containing the timestamp for each datapoint
-            # object_id_field_name_input (string): Name of the input field containing the object ID for each datapoint
-            object_type_honeycomb (string): TBD
-            object_id_field_name_honeycomb (string): TBD
-            honeycomb_uri (string): TBD
-            honeycomb_token_uri (string): TBD
-            honeycomb_audience (string): TBD
-            honeycomb_client_id (string): TBD
-            honeycomb_client_secret (string): TBD
+            time_series_database (bool): Boolean indicating whether database is a time series database (default is True)
+            object_database (bool): Boolean indicating whether database is an object database (default is True)
+            environment_name_honeycomb (string): Name of the Honeycomb environment that the data is associated with
+            object_type_honeycomb (string): Honeycomb object type that the data is associated with (e.g. DEVICE, PERSON)
+            object_id_field_name_honeycomb (string): Honeycomb field name that holds the object ID (e.g., part_number)
+            honeycomb_uri (string): Honeycomb URI
+            honeycomb_token_uri (string): Honeycomb token URI
+            honeycomb_audience (string): Honeycomb audience
+            honeycomb_client_id (string): Honeycomb client ID
+            honeycomb_client_secret (string): Honeycomb client secret
         """
         if not time_series_database and not object_database:
             raise ValueError('Database must be a time series database, an object database, or an object time series database')
@@ -136,27 +138,118 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         self,
         timestamp,
         object_id,
-        data_dict
+        data
     ):
+        """
+        Write data for a given timestamp and object ID.
+
+        Timestamp must either be a native Python datetime or a string which is
+        parsable by dateutil.parser.parse(). If timestamp is timezone-naive,
+        timezone is assumed to be UTC.
+
+        Data must be serializable by native Python json methods.
+
+        Parameters:
+            timestamp (datetime or string): Timestamp associated with data
+            object_id (string): Object ID associated with data
+            data (dict): Data to be written
+        """
         if not self.time_series_database or not self.object_database:
             raise ValueError('Writing data by timestamp and object ID only enabled for object time series databases')
         timestamp = self._python_datetime_utc(timestamp)
-        data_id = self._write_data_object_time_series(
+        self._write_data_object_time_series(
             timestamp,
             object_id,
-            data_dict
+            data
         )
-        return data_id
 
+    def fetch_data_object_time_series(
+        self,
+        start_time = None,
+        end_time = None,
+        object_ids = None
+    ):
+        """
+        Fetch data for a given timespan and set of object IDs.
+
+        If specified, start time and end time must either be native Python
+        datetimes or strings which are parsable by dateutil.parser.parse(). If
+        they are timezone-naive, they are assumed to be UTC.
+
+        If start time is not specified, all data is returned back to earliest
+        data in database. If end time is not specified, all data is returned up
+        to most recent data in database. If object IDs are not specified, data
+        is returned for all objects.
+
+        Returns a list of dictionaries, one for each datapoint.
+
+        Parameters:
+            start_time (datetime or string): Beginning of timespan (default: None)
+            end_time (datetime or string): End of timespan (default: None)
+            object_ids (list of strings): Object IDs (default: None)
+
+        Returns:
+            (list of dict): All data associated with specified time span and object IDs
+        """
+        if not self.time_series_database or not self.object_database:
+            raise ValueError('Fetching data by time interval and/or object ID only enabled for object time series databases')
+        if start_time is not None:
+            start_time = self._python_datetime_utc(start_time)
+        if end_time is not None:
+            end_time = self._python_datetime_utc(end_time)
+        data = self._fetch_data_object_time_series(
+            start_time,
+            end_time,
+            object_ids
+        )
+        return data
+
+    def delete_data_object_time_series(
+        self,
+        start_time,
+        end_time,
+        object_ids
+    ):
+        """
+        Delete data for a given timespan and set of object IDs.
+
+        Start time, end time, and object IDs must all be specified.
+
+        Start time and end time must either be native Python datetimes or
+        strings which are parsable by dateutil.parser.parse(). If they are
+        timezone-naive, they are assumed to be UTC.
+
+        Parameters:
+            start_time (datetime or string): Beginning of timespan
+            end_time (datetime or string): End of timespan
+            object_ids (list of strings): Object IDs
+        """
+        if not self.time_series_database or not self.object_database:
+            raise ValueError('Fetching data by time interval and/or object ID only enabled for object time series databases')
+        if start_time is None:
+            raise ValueError('Start time must be specified for delete data operation')
+        if end_time is None:
+            raise ValueError('End time must be specified for delete data operation')
+        if object_ids is None:
+            raise ValueError('Object IDs must be specified for delete data operation')
+        start_time = self._python_datetime_utc(start_time)
+        end_time = self._python_datetime_utc(end_time)
+        self._delete_data_object_time_series(
+            start_time,
+            end_time,
+            object_ids
+        )
+
+    # Internal method for writing object time series data (Honeycomb-specific)
     def _write_data_object_time_series(
         self,
         timestamp,
         object_id,
-        data_dict
+        data
     ):
         assignment_id = self._lookup_assignment_id_object_time_series(timestamp, object_id)
         timestamp_honeycomb_format = self._datetime_honeycomb_string(timestamp)
-        data_json = json.dumps(data_dict)
+        data_json = json.dumps(data)
         dp = honeycomb.models.DatapointInput(
                 observer = assignment_id,
                 format = 'application/json',
@@ -171,25 +264,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         data_id = output.data_id
         return data_id
 
-    def fetch_data_object_time_series(
-        self,
-        start_time = None,
-        end_time = None,
-        object_ids = None
-    ):
-        if not self.time_series_database or not self.object_database:
-            raise ValueError('Fetching data by time interval and/or object ID only enabled for object time series databases')
-        if start_time is not None:
-            start_time = self._python_datetime_utc(start_time)
-        if end_time is not None:
-            end_time = self._python_datetime_utc(end_time)
-        data = self._fetch_data_object_time_series(
-            start_time,
-            end_time,
-            object_ids
-        )
-        return data
-
+    # Internal method for fetching object time series data (Honeycomb-specific)
     def _fetch_data_object_time_series(
         self,
         start_time,
@@ -216,28 +291,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             data.append(datum)
         return data
 
-    def delete_data_object_time_series(
-        self,
-        start_time,
-        end_time,
-        object_ids
-    ):
-        if not self.time_series_database or not self.object_database:
-            raise ValueError('Fetching data by time interval and/or object ID only enabled for object time series databases')
-        if start_time is None:
-            raise ValueError('Start time must be specified for delete data operation')
-        if end_time is None:
-            raise ValueError('End time must be specified for delete data operation')
-        if object_ids is None:
-            raise ValueError('Object IDs must be specified for delete data operation')
-        start_time = self._python_datetime_utc(start_time)
-        end_time = self._python_datetime_utc(end_time)
-        self._delete_data_object_time_series(
-            start_time,
-            end_time,
-            object_ids
-        )
-
+    # Internal method for deleting object time series data (Honeycomb-specific)
     def _delete_data_object_time_series(
         self,
         start_time,

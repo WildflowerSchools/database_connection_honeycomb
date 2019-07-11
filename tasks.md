@@ -1,6 +1,5 @@
 # To do
 
-* Write docstrings
 * Align parent and sibling classes
 * Add DataQueue functionality to parent class
 * Write tests for object time series database
