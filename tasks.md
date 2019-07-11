@@ -1,6 +1,10 @@
 # To do
 
-* Add ability to delete records (to facilitate testing)
+* Make naming more consistent (datapoint intead of data, honeycomb results instead of output)
+* For public functions, separate bits that apply to all interfaces
+* Move long fetch data query string inside function
+* Move all functions inside classe
+* Add ability to delete record by start, end, and object IDs
 * Write docstrings
 * Align parent and sibling classes
 * Add DataQueue functionality to parent class
