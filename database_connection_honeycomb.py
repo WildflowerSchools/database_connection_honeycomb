@@ -59,6 +59,10 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             raise ValueError('Database must be a time series database, an object database, or an object time series database')
         if time_series_database and object_database and environment_name_honeycomb is None:
             raise ValueError('Honeycomb environment name must be specified for object time series database')
+        if time_series_database and object_database and object_type_honeycomb is None:
+            raise ValueError('Honeycomb object type must be specified for object time series database')
+        if time_series_database and object_database and object_id_field_name_honeycomb is None:
+            raise ValueError('Honeycomb object ID field name must be specified for object time series database')
         self.time_series_database = time_series_database
         self.object_database = object_database
         self.environment_name_honeycomb = environment_name_honeycomb
