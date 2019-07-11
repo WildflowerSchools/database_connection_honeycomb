@@ -1,6 +1,5 @@
 # To do
 
-* Move long fetch data query string inside function
 * Move all functions inside classe
 * Add ability to delete record by start, end, and object IDs
 * Write docstrings

@@ -422,38 +422,37 @@ def _combined_query_expression_string(
     )
     return combined_query_expression_string
 
-_fetch_datapoints_object_time_series_query_string_template = """
-query fetchDataTimeSeries {{
-  findDatapoints(query: {}) {{
-    data {{
-      data_id
-      observed_time
-      observer {{
-        ... on Assignment {{
-            environment {{
-                name
-            }}
-            assigned {{
-              ... on Device {{
-                part_number
-                tag_id
-              }}
-              ... on Person {{
-                name
-              }}
-            }}
-        }}
-      }}
-      file {{
-        data
-        name
-        contentType
-      }}
-    }}
-  }}
-}}
-"""
-
 def _fetch_datapoints_object_time_series_query_string(query_expression_string):
-    query_string = _fetch_datapoints_object_time_series_query_string_template.format(query_expression_string)
+    string_template = """
+        query fetchDataTimeSeries {{
+          findDatapoints(query: {}) {{
+            data {{
+              data_id
+              observed_time
+              observer {{
+                ... on Assignment {{
+                    environment {{
+                        name
+                    }}
+                    assigned {{
+                      ... on Device {{
+                        part_number
+                        tag_id
+                      }}
+                      ... on Person {{
+                        name
+                      }}
+                    }}
+                }}
+              }}
+              file {{
+                data
+                name
+                contentType
+              }}
+            }}
+          }}
+        }}
+        """
+    query_string = string_template.format(query_expression_string)
     return query_string
