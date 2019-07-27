@@ -134,8 +134,9 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 """,
                 {"environment_id": environment_id}).get("getEnvironment")
 
-    # Internal method for writing object time series data (Honeycomb-specific)
-    def _write_data_object_time_series(
+    # Internal method for writing a single datapoint of object time series data
+    # (Honeycomb-specific)
+    def _write_datapoint_object_time_series(
         self,
         timestamp,
         object_id,
@@ -157,6 +158,24 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         output = self.honeycomb_client.mutation.createDatapoint(dp)
         data_id = output.data_id
         return data_id
+
+    # Internal method for writing multiple datapoints of object time series data
+    # (Honeycomb-specific)
+    def _write_data_object_time_series(
+        self,
+        datapoints
+    ):
+        data_ids = []
+        for datapoint in datapoints:
+            timestamp = datapoint.pop('timestamp')
+            object_id = datapoint.pop('object_id')
+            data_id = self._write_datapoint_object_time_series(
+                timestamp,
+                object_id,
+                datapoint
+            )
+            data_ids.append(data_id)
+        return data_ids
 
     # Internal method for fetching object time series data (Honeycomb-specific)
     def _fetch_data_object_time_series(
