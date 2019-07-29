@@ -7,6 +7,7 @@ import datetime
 import dateutil.parser
 import json
 import os
+import math
 
 class DatabaseConnectionHoneycomb(DatabaseConnection):
     """
@@ -19,6 +20,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         environment_name_honeycomb = None,
         object_type_honeycomb = None,
         object_id_field_name_honeycomb = None,
+        write_chunk_size = 20,
         honeycomb_uri = None,
         honeycomb_token_uri = None,
         honeycomb_audience = None,
@@ -72,6 +74,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         self.environment_name_honeycomb = environment_name_honeycomb
         self.object_type_honeycomb = object_type_honeycomb
         self.object_id_field_name_honeycomb = object_id_field_name_honeycomb
+        self.write_chunk_size = write_chunk_size
         if honeycomb_uri is None:
             honeycomb_uri = os.getenv('HONEYCOMB_URI')
             if honeycomb_uri is None:
@@ -161,9 +164,25 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         data_id = output.data_id
         return data_id
 
+    # Internal method for writing object time series data (Honeycomb-specific)
+    def _write_data_object_time_series(
+        self,
+        datapoints
+    ):
+        num_datapoints = len(datapoints)
+        num_chunks = math.ceil(num_datapoints/self.write_chunk_size)
+        data_ids = []
+        for chunk_index in range(num_chunks):
+            chunk_beginning = chunk_index*self.write_chunk_size
+            chunk_end = min((chunk_index + 1)*self.write_chunk_size, num_datapoints)
+            chunk_datapoints = datapoints[chunk_beginning:chunk_end]
+            chunk_data_ids = self._write_datapoints_object_time_series(chunk_datapoints)
+            data_ids.extend(chunk_data_ids)
+        return data_ids
+
     # Internal method for writing multiple datapoints of object time series data
     # (Honeycomb-specific)
-    def _write_data_object_time_series(
+    def _write_datapoints_object_time_series(
         self,
         datapoints
     ):
