@@ -194,37 +194,22 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             data = upload.data
             filename = uuid4().hex
             upload.data = filename
-            files.add_file("variables.datapoint.file.data", filename, data, upload.contentType)
+            files.add_file(
+                'variables.datapoint_{}.file.data'.format(datapoint_index),
+                filename,
+                data,
+                upload.contentType
+            )
             if hasattr(datapoint_input_object, "to_json"):
                 variables['datapoint_{}'.format(datapoint_index)] = datapoint_input_object.to_json()
             else:
                 variables['datapoint_{}'.format(datapoint_index)] = datapoint_input_object
-        print(query)
-        print(variables)
-        print(files)
         results = self.honeycomb_client.client.execute(query, variables, files)
-        return(results)
-        # if hasattr(results, "get"):
-        #     return Datapoint.from_json(results.get("createDatapoint"))
-        # else:
-        #     print(results)
-        #     raise Exception("createDatapoint failed")
-
-    # def _write_data_object_time_series(
-    #     self,
-    #     datapoints
-    # ):
-    #     data_ids = []
-    #     for datapoint in datapoints:
-    #         timestamp = datapoint.pop('timestamp')
-    #         object_id = datapoint.pop('object_id')
-    #         data_id = self._write_datapoint_object_time_series(
-    #             timestamp,
-    #             object_id,
-    #             datapoint
-    #         )
-    #         data_ids.append(data_id)
-    #     return data_ids
+        try:
+            data_ids = [results['data_id_{}'.format(i)]['data_id'] for i in range(num_datapoints)]
+        except:
+            raise Exception('Received unexpected response from Honeycomb')
+        return data_ids
 
     # Internal method for fetching object time series data (Honeycomb-specific)
     def _fetch_data_object_time_series(
