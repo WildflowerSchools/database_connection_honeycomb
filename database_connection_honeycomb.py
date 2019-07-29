@@ -180,25 +180,22 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             assignment_id = self._lookup_assignment_id_object_time_series(timestamp, object_id)
             timestamp_honeycomb_format = self._datetime_honeycomb_string(timestamp)
             data_json = json.dumps(datapoint_dict)
+            filename = uuid4().hex
+            files.add_file(
+                'variables.datapoint_{}.file.data'.format(datapoint_index),
+                filename,
+                data_json,
+                'application/json'
+            )
             datapoint_input_object = honeycomb.models.DatapointInput(
                     observer = assignment_id,
                     format = 'application/json',
                     file = honeycomb.models.S3FileInput(
                         name = 'datapoint.json',
                         contentType = 'application/json',
-                        data = data_json,
+                        data = filename,
                     ),
                     observed_time= timestamp_honeycomb_format
-            )
-            upload = datapoint_input_object.file
-            data = upload.data
-            filename = uuid4().hex
-            upload.data = filename
-            files.add_file(
-                'variables.datapoint_{}.file.data'.format(datapoint_index),
-                filename,
-                data,
-                upload.contentType
             )
             if hasattr(datapoint_input_object, "to_json"):
                 variables['datapoint_{}'.format(datapoint_index)] = datapoint_input_object.to_json()
