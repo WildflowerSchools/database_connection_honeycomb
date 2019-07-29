@@ -1,10 +1,13 @@
 from database_connection import DatabaseConnection
 from database_connection import DataQueue
 import honeycomb
+from gqlpycgen.client import FileUpload
+from uuid import uuid4
 import datetime
 import dateutil.parser
 import json
 import os
+import math
 
 class DatabaseConnectionHoneycomb(DatabaseConnection):
     """
@@ -17,6 +20,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         environment_name_honeycomb = None,
         object_type_honeycomb = None,
         object_id_field_name_honeycomb = None,
+        write_chunk_size = 20,
         honeycomb_uri = None,
         honeycomb_token_uri = None,
         honeycomb_audience = None,
@@ -70,6 +74,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         self.environment_name_honeycomb = environment_name_honeycomb
         self.object_type_honeycomb = object_type_honeycomb
         self.object_id_field_name_honeycomb = object_id_field_name_honeycomb
+        self.write_chunk_size = write_chunk_size
         if honeycomb_uri is None:
             honeycomb_uri = os.getenv('HONEYCOMB_URI')
             if honeycomb_uri is None:
@@ -134,8 +139,9 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 """,
                 {"environment_id": environment_id}).get("getEnvironment")
 
-    # Internal method for writing object time series data (Honeycomb-specific)
-    def _write_data_object_time_series(
+    # Internal method for writing a single datapoint of object time series data
+    # (Honeycomb-specific)
+    def _write_datapoint_object_time_series(
         self,
         timestamp,
         object_id,
@@ -157,6 +163,69 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         output = self.honeycomb_client.mutation.createDatapoint(dp)
         data_id = output.data_id
         return data_id
+
+    # Internal method for writing object time series data (Honeycomb-specific)
+    def _write_data_object_time_series(
+        self,
+        datapoints
+    ):
+        num_datapoints = len(datapoints)
+        num_chunks = math.ceil(num_datapoints/self.write_chunk_size)
+        data_ids = []
+        for chunk_index in range(num_chunks):
+            chunk_beginning = chunk_index*self.write_chunk_size
+            chunk_end = min((chunk_index + 1)*self.write_chunk_size, num_datapoints)
+            chunk_datapoints = datapoints[chunk_beginning:chunk_end]
+            chunk_data_ids = self._write_datapoints_object_time_series(chunk_datapoints)
+            data_ids.extend(chunk_data_ids)
+        return data_ids
+
+    # Internal method for writing multiple datapoints of object time series data
+    # (Honeycomb-specific)
+    def _write_datapoints_object_time_series(
+        self,
+        datapoints
+    ):
+        num_datapoints = len(datapoints)
+        query = 'mutation createDatapoints ({}) {{\n{}\n}}'.format(
+            ', '.join(['$datapoint_{}: DatapointInput'.format(i) for i in range(num_datapoints)]),
+            '\n'.join(['    data_id_{}: createDatapoint(datapoint: $datapoint_{}) {{data_id}}'.format(i, i) for i in range(num_datapoints)])
+        )
+        variables = dict()
+        files = FileUpload()
+        for datapoint_index, datapoint_dict in enumerate(datapoints):
+            timestamp = datapoint_dict.pop('timestamp')
+            object_id = datapoint_dict.pop('object_id')
+            assignment_id = self._lookup_assignment_id_object_time_series(timestamp, object_id)
+            timestamp_honeycomb_format = self._datetime_honeycomb_string(timestamp)
+            data_json = json.dumps(datapoint_dict)
+            filename = uuid4().hex
+            files.add_file(
+                'variables.datapoint_{}.file.data'.format(datapoint_index),
+                filename,
+                data_json,
+                'application/json'
+            )
+            datapoint_input_object = honeycomb.models.DatapointInput(
+                    observer = assignment_id,
+                    format = 'application/json',
+                    file = honeycomb.models.S3FileInput(
+                        name = 'datapoint.json',
+                        contentType = 'application/json',
+                        data = filename,
+                    ),
+                    observed_time= timestamp_honeycomb_format
+            )
+            if hasattr(datapoint_input_object, "to_json"):
+                variables['datapoint_{}'.format(datapoint_index)] = datapoint_input_object.to_json()
+            else:
+                variables['datapoint_{}'.format(datapoint_index)] = datapoint_input_object
+        results = self.honeycomb_client.client.execute(query, variables, files)
+        try:
+            data_ids = [results['data_id_{}'.format(i)]['data_id'] for i in range(num_datapoints)]
+        except:
+            raise Exception('Received unexpected response from Honeycomb')
+        return data_ids
 
     # Internal method for fetching object time series data (Honeycomb-specific)
     def _fetch_data_object_time_series(
