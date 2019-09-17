@@ -127,6 +127,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                           name
                           tag_id
                           description
+                          serial_number
+                          mac_address
                         }
                         ... on Person {
                           person_id
