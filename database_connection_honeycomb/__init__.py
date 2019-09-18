@@ -159,7 +159,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 contentType='application/json',
                 data=data_json,
             ),
-            observed_time=timestamp_honeycomb_format,
+            timestamp=timestamp_honeycomb_format,
         )
         output = self.honeycomb_client.mutation.createDatapoint(dp)
         data_id = output.data_id
@@ -215,7 +215,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                     contentType='application/json',
                     data=filename,
                 ),
-                observed_time=timestamp_honeycomb_format
+                timestamp=timestamp_honeycomb_format
             )
             if hasattr(datapoint_input_object, "to_json"):
                 variables['datapoint_{}'.format(datapoint_index)] = datapoint_input_object.to_json()
@@ -243,7 +243,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         data = []
         for datapoint in datapoints:
             datum = {}
-            datum.update({'timestamp': self._python_datetime_utc(datapoint.get('observed_time'))})
+            datum.update({'timestamp': self._python_datetime_utc(datapoint.get('timestamp'))})
             datum.update({'environment_name': datapoint.get('observer', {}).get('environment', {}).get('name')})
             datum.update({'object_id': datapoint.get('observer', {}).get('assigned', {}).get(self.object_id_field_name_honeycomb)})
             data_string = datapoint.get('file', {}).get('data')
@@ -427,7 +427,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
     def _start_time_query_expression_string(self, start_time):
         start_time_honeycomb_string = self._datetime_honeycomb_string(start_time)
         start_time_query_expression_string = self._query_expression_string(
-            field_string='observed_time',
+            field_string='timestamp',
             operator_string='GTE',
             value_string=start_time_honeycomb_string
         )
@@ -436,7 +436,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
     def _end_time_query_expression_string(self, end_time):
         end_time_honeycomb_string = self._datetime_honeycomb_string(end_time)
         end_time_query_expression_string = self._query_expression_string(
-            field_string='observed_time',
+            field_string='timestamp',
             operator_string='LTE',
             value_string=end_time_honeycomb_string
         )
@@ -469,7 +469,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
               findDatapoints(query: {}) {{
                 data {{
                   data_id
-                  observed_time
+                  timestamp
                   observer {{
                     ... on Assignment {{
                         environment {{
