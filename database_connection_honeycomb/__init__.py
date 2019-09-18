@@ -1,31 +1,30 @@
 from database_connection import DatabaseConnection
-from database_connection import DataQueue
 import honeycomb
 from gqlpycgen.client import FileUpload
 from uuid import uuid4
-import datetime
-import dateutil.parser
 import json
 import os
 import math
+
 
 class DatabaseConnectionHoneycomb(DatabaseConnection):
     """
     Class to define a DatabaseConnection to Wildflower's Honeycomb database
     """
+
     def __init__(
         self,
-        time_series_database = True,
-        object_database = True,
-        environment_name_honeycomb = None,
-        object_type_honeycomb = None,
-        object_id_field_name_honeycomb = None,
-        write_chunk_size = 20,
-        honeycomb_uri = None,
-        honeycomb_token_uri = None,
-        honeycomb_audience = None,
-        honeycomb_client_id = None,
-        honeycomb_client_secret = None
+        time_series_database=True,
+        object_database=True,
+        environment_name_honeycomb=None,
+        object_type_honeycomb=None,
+        object_id_field_name_honeycomb=None,
+        write_chunk_size=20,
+        honeycomb_uri=None,
+        honeycomb_token_uri=None,
+        honeycomb_audience=None,
+        honeycomb_client_id=None,
+        honeycomb_client_secret=None
     ):
         """
         Constructor for DatabaseConnectionHoneycomb.
@@ -96,8 +95,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             if honeycomb_client_secret is None:
                 raise ValueError('Honeycomb client secret not specified and environment variable HONEYCOMB_CLIENT_SECRET not set')
         self.honeycomb_client = honeycomb.HoneycombClient(
-            uri = honeycomb_uri,
-            client_credentials = {
+            uri=honeycomb_uri,
+            client_credentials={
                 'token_uri': honeycomb_token_uri,
                 'audience': honeycomb_audience,
                 'client_id': honeycomb_client_id,
@@ -105,7 +104,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             }
         )
         if self.environment_name_honeycomb is not None:
-            environments = self.honeycomb_client.query.findEnvironment(name = self.environment_name_honeycomb)
+            environments = self.honeycomb_client.query.findEnvironment(name=self.environment_name_honeycomb)
             environment_id = environments.data[0].get('environment_id')
             self.environment = self.honeycomb_client.query.query(
                 """
@@ -153,14 +152,14 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         timestamp_honeycomb_format = self._datetime_honeycomb_string(timestamp)
         data_json = json.dumps(data)
         dp = honeycomb.models.DatapointInput(
-                observer = assignment_id,
-                format = 'application/json',
-                file = honeycomb.models.S3FileInput(
-                    name = 'datapoint.json',
-                    contentType = 'application/json',
-                    data = data_json,
-                ),
-                observed_time= timestamp_honeycomb_format
+            observer=assignment_id,
+            format='application/json',
+            file=honeycomb.models.S3FileInput(
+                name='datapoint.json',
+                contentType='application/json',
+                data=data_json,
+            ),
+            observed_time=timestamp_honeycomb_format,
         )
         output = self.honeycomb_client.mutation.createDatapoint(dp)
         data_id = output.data_id
@@ -172,11 +171,11 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         datapoints
     ):
         num_datapoints = len(datapoints)
-        num_chunks = math.ceil(num_datapoints/self.write_chunk_size)
+        num_chunks = math.ceil(num_datapoints / self.write_chunk_size)
         data_ids = []
         for chunk_index in range(num_chunks):
-            chunk_beginning = chunk_index*self.write_chunk_size
-            chunk_end = min((chunk_index + 1)*self.write_chunk_size, num_datapoints)
+            chunk_beginning = chunk_index * self.write_chunk_size
+            chunk_end = min((chunk_index + 1) * self.write_chunk_size, num_datapoints)
             chunk_datapoints = datapoints[chunk_beginning:chunk_end]
             chunk_data_ids = self._write_datapoints_object_time_series(chunk_datapoints)
             data_ids.extend(chunk_data_ids)
@@ -209,14 +208,14 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 'application/json'
             )
             datapoint_input_object = honeycomb.models.DatapointInput(
-                    observer = assignment_id,
-                    format = 'application/json',
-                    file = honeycomb.models.S3FileInput(
-                        name = 'datapoint.json',
-                        contentType = 'application/json',
-                        data = filename,
-                    ),
-                    observed_time= timestamp_honeycomb_format
+                observer=assignment_id,
+                format='application/json',
+                file=honeycomb.models.S3FileInput(
+                    name='datapoint.json',
+                    contentType='application/json',
+                    data=filename,
+                ),
+                observed_time=timestamp_honeycomb_format
             )
             if hasattr(datapoint_input_object, "to_json"):
                 variables['datapoint_{}'.format(datapoint_index)] = datapoint_input_object.to_json()
@@ -225,7 +224,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         results = self.honeycomb_client.client.execute(query, variables, files)
         try:
             data_ids = [results['data_id_{}'.format(i)]['data_id'] for i in range(num_datapoints)]
-        except:
+        except Exception:
             raise Exception('Received unexpected response from Honeycomb')
         return data_ids
 
@@ -251,7 +250,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             try:
                 data_dict = json.loads(data_string)
                 datum.update(data_dict)
-            except:
+            except Exception:
                 pass
             data.append(datum)
         return data
@@ -324,9 +323,9 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
 
     def _fetch_assignment_ids_object_time_series(
         self,
-        start_time = None,
-        end_time = None,
-        object_ids = None
+        start_time=None,
+        end_time=None,
+        object_ids=None
     ):
         if not self.time_series_database or not self.object_database or self.environment_name_honeycomb is None:
             raise ValueError('Assignment ID lookup only enabled for object time series databases with Honeycomb environment specified')
@@ -337,19 +336,19 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             if object_ids is not None and assignment.get('assigned').get(self.object_id_field_name_honeycomb) not in object_ids:
                 continue
             assignment_end = assignment.get('end')
-            if start_time is not None and assignment_end is not None and self._python_datetime_utc(start_time) >  self._python_datetime_utc(assignment_end):
+            if start_time is not None and assignment_end is not None and self._python_datetime_utc(start_time) > self._python_datetime_utc(assignment_end):
                 continue
             assignment_start = assignment.get('start')
-            if end_time is not None and assignment_start is not None and self._python_datetime_utc(end_time) <  self._python_datetime_utc(assignment_start):
+            if end_time is not None and assignment_start is not None and self._python_datetime_utc(end_time) < self._python_datetime_utc(assignment_start):
                 continue
             relevant_assignment_ids.append(assignment.get('assignment_id'))
         return relevant_assignment_ids
 
     def _fetch_data_ids_object_time_series(
         self,
-        start_time = None,
-        end_time = None,
-        object_ids = None
+        start_time=None,
+        end_time=None,
+        object_ids=None
     ):
         if not self.time_series_database or not self.object_database:
             raise ValueError('Fetching data IDs by time interval and/or object ID only enabled for object time series databases')
@@ -365,9 +364,9 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
 
     def _fetch_datapoints_object_time_series(
         self,
-        start_time = None,
-        end_time = None,
-        object_ids = None
+        start_time=None,
+        end_time=None,
+        object_ids=None
     ):
         if not self.time_series_database or not self.object_database:
             raise ValueError('Fetching datapoints by time interval and/or object ID only enabled for object time series databases')
@@ -382,7 +381,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             end_time
         )
         query_string = self._fetch_datapoints_object_time_series_query_string(query_expression_string)
-        query_results = self.honeycomb_client.query.query(query_string, variables = {})
+        query_results = self.honeycomb_client.query.query(query_string, variables={})
         datapoints = query_results.get('findDatapoints').get('data')
         return datapoints
 
@@ -393,10 +392,10 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
 
     def _query_expression_string(
         self,
-        field_string = None,
-        operator_string = None,
-        value_string = None,
-        children_query_expression_string_list = None
+        field_string=None,
+        operator_string=None,
+        value_string=None,
+        children_query_expression_string_list=None
     ):
         query_expression_string = '{'
         if field_string is not None:
@@ -414,40 +413,40 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         assignment_ids_query_expression_string_list = []
         for assignment_id in assignment_ids:
             assigment_id_query_expression_string = self._query_expression_string(
-                field_string = 'observer',
-                operator_string = 'EQ',
-                value_string = assignment_id
+                field_string='observer',
+                operator_string='EQ',
+                value_string=assignment_id
             )
             assignment_ids_query_expression_string_list.append(assigment_id_query_expression_string)
         assignment_ids_query_expression_string = self._query_expression_string(
-            operator_string = 'OR',
-            children_query_expression_string_list = assignment_ids_query_expression_string_list
+            operator_string='OR',
+            children_query_expression_string_list=assignment_ids_query_expression_string_list
         )
         return assignment_ids_query_expression_string
 
     def _start_time_query_expression_string(self, start_time):
         start_time_honeycomb_string = self._datetime_honeycomb_string(start_time)
         start_time_query_expression_string = self._query_expression_string(
-            field_string = 'observed_time',
-            operator_string = 'GTE',
-            value_string = start_time_honeycomb_string
+            field_string='observed_time',
+            operator_string='GTE',
+            value_string=start_time_honeycomb_string
         )
         return start_time_query_expression_string
 
     def _end_time_query_expression_string(self, end_time):
         end_time_honeycomb_string = self._datetime_honeycomb_string(end_time)
         end_time_query_expression_string = self._query_expression_string(
-            field_string = 'observed_time',
-            operator_string = 'LTE',
-            value_string = end_time_honeycomb_string
+            field_string='observed_time',
+            operator_string='LTE',
+            value_string=end_time_honeycomb_string
         )
         return end_time_query_expression_string
 
     def _combined_query_expression_string(
         self,
         assignment_ids,
-        start_time = None,
-        end_time = None
+        start_time=None,
+        end_time=None
     ):
         combined_query_expression_string_list = []
         assignment_ids_string = self._assignment_ids_query_expression_string(assignment_ids)
@@ -459,8 +458,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             end_time_string = self._end_time_query_expression_string(end_time)
             combined_query_expression_string_list.append(end_time_string)
         combined_query_expression_string = self._query_expression_string(
-            operator_string = 'AND',
-            children_query_expression_string_list = combined_query_expression_string_list
+            operator_string='AND',
+            children_query_expression_string_list=combined_query_expression_string_list
         )
         return combined_query_expression_string
 
