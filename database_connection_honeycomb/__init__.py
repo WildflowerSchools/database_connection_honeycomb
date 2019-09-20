@@ -152,7 +152,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         timestamp_honeycomb_format = self._datetime_honeycomb_string(timestamp)
         data_json = json.dumps(data)
         dp = honeycomb.models.DatapointInput(
-            observer=assignment_id,
+            source=honeycomb.models.DataSourceInput(type=honeycomb.models.DataSourceType.MEASURED, source=assignment_id),
             format='application/json',
             file=honeycomb.models.S3FileInput(
                 name='datapoint.json',
@@ -208,7 +208,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 'application/json'
             )
             datapoint_input_object = honeycomb.models.DatapointInput(
-                observer=assignment_id,
+                source=honeycomb.models.DataSourceInput(type=honeycomb.models.DataSourceType.MEASURED, source=assignment_id),
                 format='application/json',
                 file=honeycomb.models.S3FileInput(
                     name='datapoint.json',
@@ -243,9 +243,10 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         data = []
         for datapoint in datapoints:
             datum = {}
+            source = datapoint.get('source', {}).get('source', {})
             datum.update({'timestamp': self._python_datetime_utc(datapoint.get('timestamp'))})
-            datum.update({'environment_name': datapoint.get('observer', {}).get('environment', {}).get('name')})
-            datum.update({'object_id': datapoint.get('observer', {}).get('assigned', {}).get(self.object_id_field_name_honeycomb)})
+            datum.update({'environment_name': source.get('environment', {}).get('name')})
+            datum.update({'object_id': source.get('assigned', {}).get(self.object_id_field_name_honeycomb)})
             data_string = datapoint.get('file', {}).get('data')
             try:
                 data_dict = json.loads(data_string)
@@ -413,7 +414,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         assignment_ids_query_expression_string_list = []
         for assignment_id in assignment_ids:
             assigment_id_query_expression_string = self._query_expression_string(
-                field_string='observer',
+                field_string='source',
                 operator_string='EQ',
                 value_string=assignment_id
             )
@@ -470,19 +471,22 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 data {{
                   data_id
                   timestamp
-                  observer {{
-                    ... on Assignment {{
-                        environment {{
-                            name
-                        }}
-                        assigned {{
-                          ... on Device {{
-                            part_number
-                            tag_id
-                          }}
-                          ... on Person {{
-                            name
-                          }}
+                  source {{
+                      type
+                      source {{
+                        ... on Assignment {{
+                            environment {{
+                                name
+                            }}
+                            assigned {{
+                              ... on Device {{
+                                part_number
+                                tag_id
+                              }}
+                              ... on Person {{
+                                name
+                              }}
+                            }}
                         }}
                     }}
                   }}
