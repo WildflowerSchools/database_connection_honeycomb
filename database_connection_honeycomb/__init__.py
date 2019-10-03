@@ -376,6 +376,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             end_time,
             object_ids
         )
+        if len(assignment_ids) == 0:
+            return []
         query_expression_string = self._combined_query_expression_string(
             assignment_ids,
             start_time,
@@ -414,7 +416,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         assignment_ids_query_expression_string_list = []
         for assignment_id in assignment_ids:
             assigment_id_query_expression_string = self._query_expression_string(
-                field_string='source',
+                field_string='source.source',
                 operator_string='EQ',
                 value_string=assignment_id
             )
