@@ -414,7 +414,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         assignment_ids_query_expression_string_list = []
         for assignment_id in assignment_ids:
             assigment_id_query_expression_string = self._query_expression_string(
-                field_string='source',
+                field_string='source.source',
                 operator_string='EQ',
                 value_string=assignment_id
             )
