@@ -376,6 +376,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             end_time,
             object_ids
         )
+        if len(assignment_ids) == 0:
+            return []
         query_expression_string = self._combined_query_expression_string(
             assignment_ids,
             start_time,
