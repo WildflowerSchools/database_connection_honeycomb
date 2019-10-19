@@ -2,6 +2,7 @@ import os
 from setuptools import setup, find_packages
 
 BASEDIR = os.path.dirname(os.path.abspath(__file__))
+VERSION = open(os.path.join(BASEDIR, 'VERSION')).read().strip()
 
 BASE_DEPENDENCIES = [
     'wf-database-connection>=0.1.1',
@@ -15,7 +16,7 @@ os.chdir(os.path.normpath(BASEDIR))
 setup(
     name='wf-database-connection-honeycomb',
     packages=find_packages(),
-    version='0.1.1',
+    version=VERSION,
     include_package_data=True,
     description='An implementation of the database_connection API using Wildflower\'s Honeycomb database',
     long_description=open('README.md').read(),
