@@ -1,5 +1,10 @@
 from setuptools import setup, find_packages
 
+BASE_DEPENDENCIES = [
+    'wf-database-connection>=0.1.1',
+    'wildflower-honeycomb-sdk>=0.7.3',
+    'python-dateutil>=2.8.0'
+]
 setup(
     name='wf-database-connection-honeycomb',
     packages=find_packages(),
@@ -10,11 +15,7 @@ setup(
     url='https://github.com/WildflowerSchools/database_connection_honeycomb',
     author='Theodore Quinn',
     author_email='ted.quinn@wildflowerschools.org',
-    install_requires=[
-        'wf-database-connection>=0.1.0',
-        'wildflower-honeycomb-sdk>=0.7.2',
-        'python-dateutil>=2.8.0'
-    ],
+    install_requires=BASE_DEPENDENCIES,
     keywords=['database'],
     classifiers=[
         'Intended Audience :: Developers',
