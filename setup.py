@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name='wf-database-connection-honeycomb',
     packages=find_packages(),
-    version='0.1.0',
+    version='0.1.1',
     include_package_data=True,
     description='An implementation of the database_connection API using Wildflower\'s Honeycomb database',
     long_description=open('README.md').read(),
@@ -11,7 +11,7 @@ setup(
     author='Theodore Quinn',
     author_email='ted.quinn@wildflowerschools.org',
     install_requires=[
-        'wf-database-connection>=0.1.0'
+        'wf-database-connection>=0.1.0',
         'wildflower-honeycomb-sdk>=0.7.2',
         'python-dateutil>=2.8.0'
     ],
