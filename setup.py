@@ -8,7 +8,7 @@ setup(
     description='An implementation of the database_connection API using Wildflower\'s Honeycomb database',
     long_description=open('README.md').read(),
     url='https://github.com/WildflowerSchools/database_connection_honeycomb',
-    author='Ted Quinn',
+    author='Theodore Quinn',
     author_email='ted.quinn@wildflowerschools.org',
     install_requires=[
         'wf-database-connection>=0.1.0'
