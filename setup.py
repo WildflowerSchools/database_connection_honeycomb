@@ -1,18 +1,29 @@
+import os
 from setuptools import setup, find_packages
 
+BASEDIR = os.path.dirname(os.path.abspath(__file__))
+VERSION = open(os.path.join(BASEDIR, 'VERSION')).read().strip()
+
+BASE_DEPENDENCIES = [
+    'wf-database-connection>=0.1.1',
+    'wildflower-honeycomb-sdk>=0.7.3',
+    'python-dateutil>=2.8.0'
+]
+
+# allow setup.py to be run from any path
+os.chdir(os.path.normpath(BASEDIR))
+
 setup(
-    name='database_connection_honeycomb',
+    name='wf-database-connection-honeycomb',
     packages=find_packages(),
-    version='0.0.1',
+    version=VERSION,
     include_package_data=True,
     description='An implementation of the database_connection API using Wildflower\'s Honeycomb database',
     long_description=open('README.md').read(),
     url='https://github.com/WildflowerSchools/database_connection_honeycomb',
-    author='Ted Quinn',
+    author='Theodore Quinn',
     author_email='ted.quinn@wildflowerschools.org',
-    install_requires=[
-        'python-dateutil>=2.8.0'
-    ],
+    install_requires=BASE_DEPENDENCIES,
     keywords=['database'],
     classifiers=[
         'Intended Audience :: Developers',
