@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name='database_connection_honeycomb',
     packages=find_packages(),
-    version='0.0.1',
+    version='0.1.0',
     include_package_data=True,
     description='An implementation of the database_connection API using Wildflower\'s Honeycomb database',
     long_description=open('README.md').read(),
