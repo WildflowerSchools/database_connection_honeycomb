@@ -11,6 +11,8 @@ setup(
     author='Ted Quinn',
     author_email='ted.quinn@wildflowerschools.org',
     install_requires=[
+        'wf-database-connection>=0.1.0'
+        'wildflower-honeycomb-sdk>=0.7.2',
         'python-dateutil>=2.8.0'
     ],
     keywords=['database'],
