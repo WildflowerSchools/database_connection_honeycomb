@@ -1,10 +1,17 @@
+import os
 from setuptools import setup, find_packages
+
+BASEDIR = os.path.dirname(os.path.abspath(__file__))
 
 BASE_DEPENDENCIES = [
     'wf-database-connection>=0.1.1',
     'wildflower-honeycomb-sdk>=0.7.3',
     'python-dateutil>=2.8.0'
 ]
+
+# allow setup.py to be run from any path
+os.chdir(os.path.normpath(BASEDIR))
+
 setup(
     name='wf-database-connection-honeycomb',
     packages=find_packages(),
