@@ -385,23 +385,23 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             start_time,
             end_time
         )
-        query_string = self._fetch_datapoints_object_time_series_query_string(query_expression_string)
+        datapoints = []
         chunk_counter = 1
         data_ids = set()
-        datapoints = []
-        query_results = self.honeycomb_client.query.query(query_string, variables={})
-        chunk_datapoints = query_results.get('findDatapoints').get('data')
-        count = query_results.get('findDatapoints').get('page_info').get('count')
-        cursor = query_results.get('findDatapoints').get('page_info').get('cursor')
-        while cursor and count !=0:
+        cursor = None
+        while True:
+            query_string = self._fetch_datapoints_object_time_series_query_string(
+                query_expression_string,
+                cursor
+            )
+            query_results = self.honeycomb_client.query.query(query_string, variables={})
+            count = query_results.get('findDatapoints').get('page_info').get('count')
+            cursor = query_results.get('findDatapoints').get('page_info').get('cursor')
+            if cursor is None or count == 0:
+                break
+            chunk_datapoints = query_results.get('findDatapoints').get('data')
             first_timestamp = chunk_datapoints[0].get('timestamp')
             last_timestamp = chunk_datapoints[-1].get('timestamp')
-            print('Chunk {}: fetched {} results from {} to {}'.format(
-                chunk_counter,
-                count,
-                first_timestamp,
-                last_timestamp
-            ))
             datapoints_added = 0
             for datapoint in chunk_datapoints:
                 data_id = datapoint.get('data_id')
@@ -409,15 +409,13 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                     data_ids.add(data_id)
                     datapoints.append(datapoint)
                     datapoints_added +=1
-            print('Added {} datapoints'.format(datapoints_added))
-            query_string = self._fetch_datapoints_object_time_series_query_string(
-                query_expression_string,
-                cursor=cursor
-            )
-            query_results = self.honeycomb_client.query.query(query_string, variables={})
-            chunk_datapoints = query_results.get('findDatapoints').get('data')
-            count = query_results.get('findDatapoints').get('page_info').get('count')
-            cursor = query_results.get('findDatapoints').get('page_info').get('cursor')
+            print('Chunk {}: fetched {} results from {} to {} containing {} new datapoints'.format(
+                chunk_counter,
+                count,
+                first_timestamp,
+                last_timestamp,
+                datapoints_added
+            ))
             chunk_counter += 1
         return datapoints
 
