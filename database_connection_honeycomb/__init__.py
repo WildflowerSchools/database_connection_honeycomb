@@ -20,6 +20,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         object_type_honeycomb=None,
         object_id_field_name_honeycomb=None,
         write_chunk_size=20,
+        read_chunk_size=1000,
         honeycomb_uri=None,
         honeycomb_token_uri=None,
         honeycomb_audience=None,
@@ -74,6 +75,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         self.object_type_honeycomb = object_type_honeycomb
         self.object_id_field_name_honeycomb = object_id_field_name_honeycomb
         self.write_chunk_size = write_chunk_size
+        self.read_chunk_size = read_chunk_size
         if honeycomb_uri is None:
             honeycomb_uri = os.getenv('HONEYCOMB_URI')
             if honeycomb_uri is None:
@@ -384,8 +386,39 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             end_time
         )
         query_string = self._fetch_datapoints_object_time_series_query_string(query_expression_string)
+        chunk_counter = 1
+        data_ids = set()
+        datapoints = []
         query_results = self.honeycomb_client.query.query(query_string, variables={})
-        datapoints = query_results.get('findDatapoints').get('data')
+        chunk_datapoints = query_results.get('findDatapoints').get('data')
+        count = query_results.get('findDatapoints').get('page_info').get('count')
+        cursor = query_results.get('findDatapoints').get('page_info').get('cursor')
+        while cursor and count !=0:
+            first_timestamp = chunk_datapoints[0].get('timestamp')
+            last_timestamp = chunk_datapoints[-1].get('timestamp')
+            print('Chunk {}: fetched {} results from {} to {}'.format(
+                chunk_counter,
+                count,
+                first_timestamp,
+                last_timestamp
+            ))
+            datapoints_added = 0
+            for datapoint in chunk_datapoints:
+                data_id = datapoint.get('data_id')
+                if data_id not in data_ids:
+                    data_ids.add(data_id)
+                    datapoints.append(datapoint)
+                    datapoints_added +=1
+            print('Added {} datapoints'.format(datapoints_added))
+            query_string = self._fetch_datapoints_object_time_series_query_string(
+                query_expression_string,
+                cursor=cursor
+            )
+            query_results = self.honeycomb_client.query.query(query_string, variables={})
+            chunk_datapoints = query_results.get('findDatapoints').get('data')
+            count = query_results.get('findDatapoints').get('page_info').get('count')
+            cursor = query_results.get('findDatapoints').get('page_info').get('cursor')
+            chunk_counter += 1
         return datapoints
 
     def _datetime_honeycomb_string(self, timestamp):
@@ -466,40 +499,55 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         )
         return combined_query_expression_string
 
-    def _fetch_datapoints_object_time_series_query_string(self, query_expression_string):
+    def _fetch_datapoints_object_time_series_query_string(self, query_expression_string, cursor = None):
+        if cursor is not None:
+            cursor_argument_string = 'cursor: "{}",'.format(cursor)
+        else:
+            cursor_argument_string = ''
         string_template = """
-            query fetchDataTimeSeries {{
-              findDatapoints(query: {}) {{
-                data {{
-                  data_id
-                  timestamp
-                  source {{
-                      type
-                      source {{
-                        ... on Assignment {{
-                            environment {{
-                                name
-                            }}
-                            assigned {{
-                              ... on Device {{
+query fetchDataTimeSeries {{
+    findDatapoints(
+        query: {},
+        page: {{
+            {}
+            max: {},
+            sort: {{direction: ASC, field: "timestamp"}}
+        }}
+    ) {{
+        data {{
+            data_id
+            timestamp
+            source {{
+                type
+                source {{
+                    ... on Assignment {{
+                        environment {{name}}
+                        assigned {{
+                            ... on Device {{
                                 part_number
                                 tag_id
-                              }}
-                              ... on Person {{
-                                name
-                              }}
                             }}
+                            ... on Person {{name}}
                         }}
                     }}
-                  }}
-                  file {{
-                    data
-                    name
-                    contentType
-                  }}
                 }}
-              }}
             }}
-            """
-        query_string = string_template.format(query_expression_string)
+            file {{
+                data
+                name
+                contentType
+            }}
+        }}
+        page_info {{
+            count
+            cursor
+        }}
+    }}
+}}
+"""
+        query_string = string_template.format(
+            query_expression_string,
+            cursor_argument_string,
+            str(self.read_chunk_size)
+        )
         return query_string
