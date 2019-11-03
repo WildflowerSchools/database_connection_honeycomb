@@ -55,6 +55,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             environment_name_honeycomb (string): Name of the Honeycomb environment that the data is associated with
             object_type_honeycomb (string): Honeycomb object type that the data is associated with (e.g. DEVICE, PERSON)
             object_id_field_name_honeycomb (string): Honeycomb field name that holds the object ID (e.g., part_number)
+            write_chunk_size (int): Number of datapoints to write in each request (default is 20)
+            read_chunk_size (int): Number of datapoints to read in each request (default is 1000)
             honeycomb_uri (string): Honeycomb URI
             honeycomb_token_uri (string): Honeycomb token URI
             honeycomb_audience (string): Honeycomb audience
