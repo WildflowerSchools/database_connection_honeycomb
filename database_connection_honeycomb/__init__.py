@@ -501,15 +501,23 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
 
     def _fetch_datapoints_object_time_series_query_string(self, query_expression_string, cursor = None):
         if cursor is not None:
-            cursor_argument_string = 'cursor: "{}",'.format(cursor)
+            query_string = FETCH_DATA_WITH_CURSOR_TEMPLATE.format(
+                query_expression_string,
+                cursor,
+                str(self.read_chunk_size)
+            )
         else:
-            cursor_argument_string = ''
-        string_template = """
+            query_string = FETCH_DATA_WITHOUT_CURSOR_TEMPLATE.format(
+                query_expression_string,
+                str(self.read_chunk_size)
+            )
+        return query_string
+
+FETCH_DATA_WITHOUT_CURSOR_TEMPLATE = """
 query fetchDataTimeSeries {{
     findDatapoints(
         query: {},
         page: {{
-            {}
             max: {},
             sort: {{direction: ASC, field: "timestamp"}}
         }}
@@ -545,9 +553,45 @@ query fetchDataTimeSeries {{
     }}
 }}
 """
-        query_string = string_template.format(
-            query_expression_string,
-            cursor_argument_string,
-            str(self.read_chunk_size)
-        )
-        return query_string
+
+FETCH_DATA_WITH_CURSOR_TEMPLATE = """
+query fetchDataTimeSeries {{
+    findDatapoints(
+        query: {},
+        page: {{
+            cursor: "{}",
+            max: {},
+            sort: {{direction: ASC, field: "timestamp"}}
+        }}
+    ) {{
+        data {{
+            data_id
+            timestamp
+            source {{
+                type
+                source {{
+                    ... on Assignment {{
+                        environment {{name}}
+                        assigned {{
+                            ... on Device {{
+                                part_number
+                                tag_id
+                            }}
+                            ... on Person {{name}}
+                        }}
+                    }}
+                }}
+            }}
+            file {{
+                data
+                name
+                contentType
+            }}
+        }}
+        page_info {{
+            count
+            cursor
+        }}
+    }}
+}}
+"""
