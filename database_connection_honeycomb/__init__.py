@@ -5,7 +5,9 @@ from uuid import uuid4
 import json
 import os
 import math
+import logging
 
+logger = logging.getLogger(__name__)
 
 class DatabaseConnectionHoneycomb(DatabaseConnection):
     """
@@ -320,7 +322,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             if end is not None and timestamp_datetime > self._python_datetime_utc(end):
                 continue
             return assignment.get('assignment_id')
-        print('No assignment found for {} at {}'.format(
+        logger.warning('No assignment found for {} at {}'.format(
             object_id,
             timestamp
         ))
@@ -411,7 +413,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                     data_ids.add(data_id)
                     datapoints.append(datapoint)
                     datapoints_added +=1
-            print('Chunk {}: fetched {} results from {} to {} containing {} new datapoints'.format(
+            logger.info('Chunk {}: fetched {} results from {} to {} containing {} new datapoints'.format(
                 chunk_counter,
                 count,
                 first_timestamp,
