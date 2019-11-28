@@ -1,5 +1,5 @@
 from database_connection import DatabaseConnection
-import honeycomb
+import minimal_honeycomb
 from gqlpycgen.client import FileUpload
 from uuid import uuid4
 import json
@@ -80,27 +80,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         self.object_id_field_name_honeycomb = object_id_field_name_honeycomb
         self.write_chunk_size = write_chunk_size
         self.read_chunk_size = read_chunk_size
-        if honeycomb_uri is None:
-            honeycomb_uri = os.getenv('HONEYCOMB_URI')
-            if honeycomb_uri is None:
-                raise ValueError('Honeycomb URI not specified and environment variable HONEYCOMB_URI not set')
-        if honeycomb_token_uri is None:
-            honeycomb_token_uri = os.getenv('HONEYCOMB_TOKEN_URI')
-            if honeycomb_token_uri is None:
-                raise ValueError('Honeycomb token URI not specified and environment variable HONEYCOMB_TOKEN_URI not set')
-        if honeycomb_audience is None:
-            honeycomb_audience = os.getenv('HONEYCOMB_AUDIENCE')
-            if honeycomb_audience is None:
-                raise ValueError('Honeycomb audience not specified and environment variable HONEYCOMB_AUDIENCE not set')
-        if honeycomb_client_id is None:
-            honeycomb_client_id = os.getenv('HONEYCOMB_CLIENT_ID')
-            if honeycomb_client_id is None:
-                raise ValueError('Honeycomb client ID not specified and environment variable HONEYCOMB_CLIENT_ID not set')
-        if honeycomb_client_secret is None:
-            honeycomb_client_secret = os.getenv('HONEYCOMB_CLIENT_SECRET')
-            if honeycomb_client_secret is None:
-                raise ValueError('Honeycomb client secret not specified and environment variable HONEYCOMB_CLIENT_SECRET not set')
-        self.honeycomb_client = honeycomb.HoneycombClient(
+        self.honeycomb_client = honeycomb.MinimalHoneycombClient(
             uri=honeycomb_uri,
             client_credentials={
                 'token_uri': honeycomb_token_uri,
@@ -110,41 +90,61 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             }
         )
         if self.environment_name_honeycomb is not None:
-            environments = self.honeycomb_client.query.findEnvironment(name=self.environment_name_honeycomb)
-            environment_id = environments.data[0].get('environment_id')
-            self.environment = self.honeycomb_client.query.query(
-                """
-                query getEnvironment ($environment_id: ID!) {
-                  getEnvironment(environment_id: $environment_id) {
-                    environment_id
-                    name
-                    description
-                    location
-                    assignments {
-                      assignment_id
-                      start
-                      end
-                      assigned_type
-                      assigned {
-                        ... on Device {
-                          device_id
-                          part_number
-                          name
-                          tag_id
-                          description
-                          serial_number
-                          mac_address
-                        }
-                        ... on Person {
-                          person_id
-                          name
-                        }
-                      }
+            findEnvironment_result = self.honeycomb_client.request(
+                request_type='query',
+                request_name='findEnvironment',
+                arguments= {
+                    'name': {
+                        'type': 'String',
+                        'value': self.environment_name_honeycomb
                     }
-                  }
-                }
-                """,
-                {"environment_id": environment_id}).get("getEnvironment")
+                },
+                return_object = [
+                    {'data': [
+                        'environment_id'
+                    ]
+                ]
+            )
+            if len(findEnvironment_result.get('data')) == 0:
+                raise ValueError('Environment name {} matched no environments'.format(self.environment_name_honeycomb))
+            if len(findEnvironment_result.get('data')) > 1:
+                raise ValueError('Environment name {} matched more than one environment'.format(self.environment_name_honeycomb))
+            environment_id = findEnvironment_result.get('data')[0].get('environment_id')
+            getEnvironment_result = self.honeycomb_client.request(
+                request_type='query',
+                request_name='getEnvironment',
+                arguments={
+                    'environment_id': {
+                        'type': 'ID!',
+                        'value': environment_id
+                    }
+                },
+                return_object = [
+                    'name',
+                    {'assignments': [
+                        'assignment_id',
+                        'start',
+                        'end',
+                        'assigned_type',
+                        {'assigned': [
+                            {'... on Device': [
+                                'device_id',
+                                'part_number',
+                                'name',
+                                'serial_number',
+                                'mac_address',
+                                'tag_id'
+                            ]},
+                            {'... on Person': [
+                                'person_id',
+                                'name'
+                            ]}
+                        ]}
+                    ]}
+                ]
+            )
+            self.environment = getEnvironment_result
+                
 
     # Internal method for writing a single datapoint of object time series data
     # (Honeycomb-specific)
