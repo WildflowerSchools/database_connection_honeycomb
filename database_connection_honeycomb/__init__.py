@@ -144,7 +144,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 ]
             )
             self.environment = getEnvironment_result
-                
+
 
     # Internal method for writing a single datapoint of object time series data
     # (Honeycomb-specific)
@@ -156,19 +156,32 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
     ):
         assignment_id = self._lookup_assignment_id_object_time_series(timestamp, object_id)
         timestamp_honeycomb_format = self._datetime_honeycomb_string(timestamp)
-        data_json = json.dumps(data)
-        dp = honeycomb.models.DatapointInput(
-            source=honeycomb.models.DataSourceInput(type=honeycomb.models.DataSourceType.MEASURED, source=assignment_id),
-            format='application/json',
-            file=honeycomb.models.S3FileInput(
-                name='datapoint.json',
-                contentType='application/json',
-                data=data_json,
-            ),
-            timestamp=timestamp_honeycomb_format,
+        createDatapoint_result = self.honeycomb_client.request(
+            request_type='mutation',
+            request_name='createDatapoint',
+            arguments={
+                'datapoint': {
+                    'type': 'DatapointInput',
+                    'value': {
+                        'timestamp': timestamp_honeycomb_format,
+                        'format': 'application/json'
+                        'source': {
+                            'type': 'MEASURED',
+                            'source': assignment_id
+                        },
+                        'file': {
+                            'name': 'datapoint.json',
+                            'contentType': 'application/json',
+                            'data': data
+                        }
+                    }
+                }
+            },
+            return_object = [
+                'data_id'
+            ]
         )
-        output = self.honeycomb_client.mutation.createDatapoint(dp)
-        data_id = output.data_id
+        data_id = createDatapoint_result.get('data_id')
         return data_id
 
     # Internal method for writing object time series data (Honeycomb-specific)
