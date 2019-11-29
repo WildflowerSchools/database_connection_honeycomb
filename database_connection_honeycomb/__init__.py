@@ -1,7 +1,5 @@
 from database_connection import DatabaseConnection
 import minimal_honeycomb
-from gqlpycgen.client import FileUpload
-from uuid import uuid4
 import json
 import os
 import math
@@ -80,14 +78,12 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         self.object_id_field_name_honeycomb = object_id_field_name_honeycomb
         self.write_chunk_size = write_chunk_size
         self.read_chunk_size = read_chunk_size
-        self.honeycomb_client = honeycomb.MinimalHoneycombClient(
+        self.honeycomb_client = minimal_honeycomb.MinimalHoneycombClient(
             uri=honeycomb_uri,
-            client_credentials={
-                'token_uri': honeycomb_token_uri,
-                'audience': honeycomb_audience,
-                'client_id': honeycomb_client_id,
-                'client_secret': honeycomb_client_secret,
-            }
+            token_uri=honeycomb_token_uri,
+            audience=honeycomb_audience,
+            client_id=honeycomb_client_id,
+            client_secret=honeycomb_client_secret
         )
         if self.environment_name_honeycomb is not None:
             findEnvironment_result = self.honeycomb_client.request(
@@ -102,7 +98,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 return_object = [
                     {'data': [
                         'environment_id'
-                    ]
+                    ]}
                 ]
             )
             if len(findEnvironment_result.get('data')) == 0:
@@ -164,7 +160,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                     'type': 'DatapointInput',
                     'value': {
                         'timestamp': timestamp_honeycomb_format,
-                        'format': 'application/json'
+                        'format': 'application/json',
                         'source': {
                             'type': 'MEASURED',
                             'source': assignment_id
@@ -207,44 +203,52 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         datapoints
     ):
         num_datapoints = len(datapoints)
-        query = 'mutation createDatapoints ({}) {{\n{}\n}}'.format(
-            ', '.join(['$datapoint_{}: DatapointInput'.format(i) for i in range(num_datapoints)]),
-            '\n'.join(['    data_id_{}: createDatapoint(datapoint: $datapoint_{}) {{data_id}}'.format(i, i) for i in range(num_datapoints)])
-        )
-        variables = dict()
-        files = FileUpload()
+        parent_request_type = 'mutation'
+        parent_request_name = 'createDatapoints'
+        child_request_list = []
         for datapoint_index, datapoint_dict in enumerate(datapoints):
             timestamp = datapoint_dict.pop('timestamp')
             object_id = datapoint_dict.pop('object_id')
             assignment_id = self._lookup_assignment_id_object_time_series(timestamp, object_id)
             timestamp_honeycomb_format = self._datetime_honeycomb_string(timestamp)
-            data_json = json.dumps(datapoint_dict)
-            filename = uuid4().hex
-            files.add_file(
-                'variables.datapoint_{}.file.data'.format(datapoint_index),
-                filename,
-                data_json,
-                'application/json'
-            )
-            datapoint_input_object = honeycomb.models.DatapointInput(
-                source=honeycomb.models.DataSourceInput(type=honeycomb.models.DataSourceType.MEASURED, source=assignment_id),
-                format='application/json',
-                file=honeycomb.models.S3FileInput(
-                    name='datapoint.json',
-                    contentType='application/json',
-                    data=filename,
-                ),
-                timestamp=timestamp_honeycomb_format
-            )
-            if hasattr(datapoint_input_object, "to_json"):
-                variables['datapoint_{}'.format(datapoint_index)] = datapoint_input_object.to_json()
-            else:
-                variables['datapoint_{}'.format(datapoint_index)] = datapoint_input_object
-        results = self.honeycomb_client.client.execute(query, variables, files)
+            child_request_name = 'createDatapoint'
+            child_arguments = {
+                'datapoint': {
+                    'type': 'DatapointInput',
+                    'value': {
+                        'timestamp': timestamp_honeycomb_format,
+                        'format': 'application/json',
+                        'source': {
+                            'type': 'MEASURED',
+                            'source': assignment_id
+                        },
+                        'file': {
+                            'name': 'datapoint.json',
+                            'contentType': 'application/json',
+                            'data': datapoint_dict
+                        }
+                    }
+                }
+            }
+            child_return_object_name = 'data_id'
+            child_return_object = [
+                'data_id'
+            ]
+            child_request_list.append({
+                'name': child_request_name,
+                'arguments': child_arguments,
+                'return_object_name': child_return_object_name,
+                'return_object': child_return_object
+            })
+        createDatapoints_result = self.honeycomb_client.compound_request(
+            parent_request_type=parent_request_type,
+            parent_request_name=parent_request_name,
+            child_request_list=child_request_list
+        )
         try:
-            data_ids = [results['data_id_{}'.format(i)]['data_id'] for i in range(num_datapoints)]
-        except Exception:
-            raise Exception('Received unexpected response from Honeycomb')
+            data_ids = [createDatapoints_result['data_id_{}'.format(datapoint_index)]['data_id'] for datapoint_index in range(num_datapoints)]
+        except:
+            raise ValueError('Received unexpected response from Honeycomb: {}'.format(createDatapoints_result))
         return data_ids
 
     # Internal method for fetching object time series data (Honeycomb-specific)
@@ -294,15 +298,23 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         return statuses
 
     def _delete_datapoint(self, data_id):
-        status = self.honeycomb_client.query.query(
-            """
-            mutation deleteSingleDatapoint ($data_id: ID!) {
-              deleteDatapoint(data_id: $data_id) {
-                status
-              }
-            }
-            """,
-            {"data_id": data_id}).get("deleteSingleDatapoint", {}).get('status')
+        deleteDatapoint_results = self.honeycomb_client.request(
+            request_type='mutation',
+            request_name='deleteDatapoint',
+            arguments={
+                'data_id': {
+                    'type': 'ID',
+                    'value': data_id
+                }
+            },
+            return_object = [
+                'status'
+            ]
+        )
+        try:
+            status = deleteDatapoint_results.get('status')
+        except:
+            raise ValueError('Received unexpected response from Honeycomb')
         return status
 
     def _lookup_assignment_id_object_time_series(
