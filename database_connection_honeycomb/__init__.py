@@ -1,7 +1,5 @@
 from database_connection import DatabaseConnection
-import honeycomb
-from gqlpycgen.client import FileUpload
-from uuid import uuid4
+import minimal_honeycomb
 import json
 import os
 import math
@@ -80,71 +78,69 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         self.object_id_field_name_honeycomb = object_id_field_name_honeycomb
         self.write_chunk_size = write_chunk_size
         self.read_chunk_size = read_chunk_size
-        if honeycomb_uri is None:
-            honeycomb_uri = os.getenv('HONEYCOMB_URI')
-            if honeycomb_uri is None:
-                raise ValueError('Honeycomb URI not specified and environment variable HONEYCOMB_URI not set')
-        if honeycomb_token_uri is None:
-            honeycomb_token_uri = os.getenv('HONEYCOMB_TOKEN_URI')
-            if honeycomb_token_uri is None:
-                raise ValueError('Honeycomb token URI not specified and environment variable HONEYCOMB_TOKEN_URI not set')
-        if honeycomb_audience is None:
-            honeycomb_audience = os.getenv('HONEYCOMB_AUDIENCE')
-            if honeycomb_audience is None:
-                raise ValueError('Honeycomb audience not specified and environment variable HONEYCOMB_AUDIENCE not set')
-        if honeycomb_client_id is None:
-            honeycomb_client_id = os.getenv('HONEYCOMB_CLIENT_ID')
-            if honeycomb_client_id is None:
-                raise ValueError('Honeycomb client ID not specified and environment variable HONEYCOMB_CLIENT_ID not set')
-        if honeycomb_client_secret is None:
-            honeycomb_client_secret = os.getenv('HONEYCOMB_CLIENT_SECRET')
-            if honeycomb_client_secret is None:
-                raise ValueError('Honeycomb client secret not specified and environment variable HONEYCOMB_CLIENT_SECRET not set')
-        self.honeycomb_client = honeycomb.HoneycombClient(
+        self.honeycomb_client = minimal_honeycomb.MinimalHoneycombClient(
             uri=honeycomb_uri,
-            client_credentials={
-                'token_uri': honeycomb_token_uri,
-                'audience': honeycomb_audience,
-                'client_id': honeycomb_client_id,
-                'client_secret': honeycomb_client_secret,
-            }
+            token_uri=honeycomb_token_uri,
+            audience=honeycomb_audience,
+            client_id=honeycomb_client_id,
+            client_secret=honeycomb_client_secret
         )
         if self.environment_name_honeycomb is not None:
-            environments = self.honeycomb_client.query.findEnvironment(name=self.environment_name_honeycomb)
-            environment_id = environments.data[0].get('environment_id')
-            self.environment = self.honeycomb_client.query.query(
-                """
-                query getEnvironment ($environment_id: ID!) {
-                  getEnvironment(environment_id: $environment_id) {
-                    environment_id
-                    name
-                    description
-                    location
-                    assignments {
-                      assignment_id
-                      start
-                      end
-                      assigned_type
-                      assigned {
-                        ... on Device {
-                          device_id
-                          part_number
-                          name
-                          tag_id
-                          description
-                          serial_number
-                          mac_address
-                        }
-                        ... on Person {
-                          person_id
-                          name
-                        }
-                      }
+            findEnvironment_result = self.honeycomb_client.request(
+                request_type='query',
+                request_name='findEnvironment',
+                arguments= {
+                    'name': {
+                        'type': 'String',
+                        'value': self.environment_name_honeycomb
                     }
-                  }
-                }
-                """,
-                {"environment_id": environment_id}).get("getEnvironment")
+                },
+                return_object = [
+                    {'data': [
+                        'environment_id'
+                    ]}
+                ]
+            )
+            if len(findEnvironment_result.get('data')) == 0:
+                raise ValueError('Environment name {} matched no environments'.format(self.environment_name_honeycomb))
+            if len(findEnvironment_result.get('data')) > 1:
+                raise ValueError('Environment name {} matched more than one environment'.format(self.environment_name_honeycomb))
+            environment_id = findEnvironment_result.get('data')[0].get('environment_id')
+            getEnvironment_result = self.honeycomb_client.request(
+                request_type='query',
+                request_name='getEnvironment',
+                arguments={
+                    'environment_id': {
+                        'type': 'ID!',
+                        'value': environment_id
+                    }
+                },
+                return_object = [
+                    'name',
+                    {'assignments': [
+                        'assignment_id',
+                        'start',
+                        'end',
+                        'assigned_type',
+                        {'assigned': [
+                            {'... on Device': [
+                                'device_id',
+                                'part_number',
+                                'name',
+                                'serial_number',
+                                'mac_address',
+                                'tag_id'
+                            ]},
+                            {'... on Person': [
+                                'person_id',
+                                'name'
+                            ]}
+                        ]}
+                    ]}
+                ]
+            )
+            self.environment = getEnvironment_result
+
 
     # Internal method for writing a single datapoint of object time series data
     # (Honeycomb-specific)
@@ -156,19 +152,32 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
     ):
         assignment_id = self._lookup_assignment_id_object_time_series(timestamp, object_id)
         timestamp_honeycomb_format = self._datetime_honeycomb_string(timestamp)
-        data_json = json.dumps(data)
-        dp = honeycomb.models.DatapointInput(
-            source=honeycomb.models.DataSourceInput(type=honeycomb.models.DataSourceType.MEASURED, source=assignment_id),
-            format='application/json',
-            file=honeycomb.models.S3FileInput(
-                name='datapoint.json',
-                contentType='application/json',
-                data=data_json,
-            ),
-            timestamp=timestamp_honeycomb_format,
+        createDatapoint_result = self.honeycomb_client.request(
+            request_type='mutation',
+            request_name='createDatapoint',
+            arguments={
+                'datapoint': {
+                    'type': 'DatapointInput',
+                    'value': {
+                        'timestamp': timestamp_honeycomb_format,
+                        'format': 'application/json',
+                        'source': {
+                            'type': 'MEASURED',
+                            'source': assignment_id
+                        },
+                        'file': {
+                            'name': 'datapoint.json',
+                            'contentType': 'application/json',
+                            'data': data
+                        }
+                    }
+                }
+            },
+            return_object = [
+                'data_id'
+            ]
         )
-        output = self.honeycomb_client.mutation.createDatapoint(dp)
-        data_id = output.data_id
+        data_id = createDatapoint_result.get('data_id')
         return data_id
 
     # Internal method for writing object time series data (Honeycomb-specific)
@@ -194,44 +203,52 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         datapoints
     ):
         num_datapoints = len(datapoints)
-        query = 'mutation createDatapoints ({}) {{\n{}\n}}'.format(
-            ', '.join(['$datapoint_{}: DatapointInput'.format(i) for i in range(num_datapoints)]),
-            '\n'.join(['    data_id_{}: createDatapoint(datapoint: $datapoint_{}) {{data_id}}'.format(i, i) for i in range(num_datapoints)])
-        )
-        variables = dict()
-        files = FileUpload()
+        parent_request_type = 'mutation'
+        parent_request_name = 'createDatapoints'
+        child_request_list = []
         for datapoint_index, datapoint_dict in enumerate(datapoints):
             timestamp = datapoint_dict.pop('timestamp')
             object_id = datapoint_dict.pop('object_id')
             assignment_id = self._lookup_assignment_id_object_time_series(timestamp, object_id)
             timestamp_honeycomb_format = self._datetime_honeycomb_string(timestamp)
-            data_json = json.dumps(datapoint_dict)
-            filename = uuid4().hex
-            files.add_file(
-                'variables.datapoint_{}.file.data'.format(datapoint_index),
-                filename,
-                data_json,
-                'application/json'
-            )
-            datapoint_input_object = honeycomb.models.DatapointInput(
-                source=honeycomb.models.DataSourceInput(type=honeycomb.models.DataSourceType.MEASURED, source=assignment_id),
-                format='application/json',
-                file=honeycomb.models.S3FileInput(
-                    name='datapoint.json',
-                    contentType='application/json',
-                    data=filename,
-                ),
-                timestamp=timestamp_honeycomb_format
-            )
-            if hasattr(datapoint_input_object, "to_json"):
-                variables['datapoint_{}'.format(datapoint_index)] = datapoint_input_object.to_json()
-            else:
-                variables['datapoint_{}'.format(datapoint_index)] = datapoint_input_object
-        results = self.honeycomb_client.client.execute(query, variables, files)
+            child_request_name = 'createDatapoint'
+            child_arguments = {
+                'datapoint': {
+                    'type': 'DatapointInput',
+                    'value': {
+                        'timestamp': timestamp_honeycomb_format,
+                        'format': 'application/json',
+                        'source': {
+                            'type': 'MEASURED',
+                            'source': assignment_id
+                        },
+                        'file': {
+                            'name': 'datapoint.json',
+                            'contentType': 'application/json',
+                            'data': datapoint_dict
+                        }
+                    }
+                }
+            }
+            child_return_object_name = 'data_id'
+            child_return_object = [
+                'data_id'
+            ]
+            child_request_list.append({
+                'name': child_request_name,
+                'arguments': child_arguments,
+                'return_object_name': child_return_object_name,
+                'return_object': child_return_object
+            })
+        createDatapoints_result = self.honeycomb_client.compound_request(
+            parent_request_type=parent_request_type,
+            parent_request_name=parent_request_name,
+            child_request_list=child_request_list
+        )
         try:
-            data_ids = [results['data_id_{}'.format(i)]['data_id'] for i in range(num_datapoints)]
-        except Exception:
-            raise Exception('Received unexpected response from Honeycomb')
+            data_ids = [createDatapoints_result['data_id_{}'.format(datapoint_index)]['data_id'] for datapoint_index in range(num_datapoints)]
+        except:
+            raise ValueError('Received unexpected response from Honeycomb: {}'.format(createDatapoints_result))
         return data_ids
 
     # Internal method for fetching object time series data (Honeycomb-specific)
@@ -241,26 +258,27 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         end_time,
         object_ids
     ):
-        datapoints = self._fetch_datapoints_object_time_series(
-            start_time,
-            end_time,
-            object_ids
-        )
-        data = []
-        for datapoint in datapoints:
-            datum = {}
-            source = datapoint.get('source', {}).get('source', {})
-            datum.update({'timestamp': self._python_datetime_utc(datapoint.get('timestamp'))})
-            datum.update({'environment_name': source.get('environment', {}).get('name')})
-            datum.update({'object_id': source.get('assigned', {}).get(self.object_id_field_name_honeycomb)})
-            data_string = datapoint.get('file', {}).get('data')
-            try:
-                data_dict = json.loads(data_string)
-                datum.update(data_dict)
-            except Exception:
-                pass
-            data.append(datum)
-        return data
+        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+        # datapoints = self._fetch_datapoints_object_time_series(
+        #     start_time,
+        #     end_time,
+        #     object_ids
+        # )
+        # data = []
+        # for datapoint in datapoints:
+        #     datum = {}
+        #     source = datapoint.get('source', {}).get('source', {})
+        #     datum.update({'timestamp': self._python_datetime_utc(datapoint.get('timestamp'))})
+        #     datum.update({'environment_name': source.get('environment', {}).get('name')})
+        #     datum.update({'object_id': source.get('assigned', {}).get(self.object_id_field_name_honeycomb)})
+        #     data_string = datapoint.get('file', {}).get('data')
+        #     try:
+        #         data_dict = json.loads(data_string)
+        #         datum.update(data_dict)
+        #     except Exception:
+        #         pass
+        #     data.append(datum)
+        # return data
 
     # Internal method for deleting object time series data (Honeycomb-specific)
     def _delete_data_object_time_series(
@@ -269,27 +287,36 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         end_time,
         object_ids
     ):
-        data_ids = self._fetch_data_ids_object_time_series(
-            start_time,
-            end_time,
-            object_ids
-        )
-        self._delete_datapoints(data_ids)
+        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+        # data_ids = self._fetch_data_ids_object_time_series(
+        #     start_time,
+        #     end_time,
+        #     object_ids
+        # )
+        # self._delete_datapoints(data_ids)
 
     def _delete_datapoints(self, data_ids):
         statuses = [self._delete_datapoint(data_id) for data_id in data_ids]
         return statuses
 
     def _delete_datapoint(self, data_id):
-        status = self.honeycomb_client.query.query(
-            """
-            mutation deleteSingleDatapoint ($data_id: ID!) {
-              deleteDatapoint(data_id: $data_id) {
-                status
-              }
-            }
-            """,
-            {"data_id": data_id}).get("deleteSingleDatapoint", {}).get('status')
+        deleteDatapoint_results = self.honeycomb_client.request(
+            request_type='mutation',
+            request_name='deleteDatapoint',
+            arguments={
+                'data_id': {
+                    'type': 'ID',
+                    'value': data_id
+                }
+            },
+            return_object = [
+                'status'
+            ]
+        )
+        try:
+            status = deleteDatapoint_results.get('status')
+        except:
+            raise ValueError('Received unexpected response from Honeycomb')
         return status
 
     def _lookup_assignment_id_object_time_series(
@@ -357,17 +384,18 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         end_time=None,
         object_ids=None
     ):
-        if not self.time_series_database or not self.object_database:
-            raise ValueError('Fetching data IDs by time interval and/or object ID only enabled for object time series databases')
-        datapoints = self._fetch_datapoints_object_time_series(
-            start_time,
-            end_time,
-            object_ids
-        )
-        data_ids = []
-        for datapoint in datapoints:
-            data_ids.append(datapoint.get('data_id'))
-        return data_ids
+        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+        # if not self.time_series_database or not self.object_database:
+        #     raise ValueError('Fetching data IDs by time interval and/or object ID only enabled for object time series databases')
+        # datapoints = self._fetch_datapoints_object_time_series(
+        #     start_time,
+        #     end_time,
+        #     object_ids
+        # )
+        # data_ids = []
+        # for datapoint in datapoints:
+        #     data_ids.append(datapoint.get('data_id'))
+        # return data_ids
 
     def _fetch_datapoints_object_time_series(
         self,
@@ -375,53 +403,54 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         end_time=None,
         object_ids=None
     ):
-        if not self.time_series_database or not self.object_database:
-            raise ValueError('Fetching datapoints by time interval and/or object ID only enabled for object time series databases')
-        assignment_ids = self._fetch_assignment_ids_object_time_series(
-            start_time,
-            end_time,
-            object_ids
-        )
-        if len(assignment_ids) == 0:
-            return []
-        query_expression_string = self._combined_query_expression_string(
-            assignment_ids,
-            start_time,
-            end_time
-        )
-        datapoints = []
-        chunk_counter = 1
-        data_ids = set()
-        cursor = None
-        while True:
-            query_string = self._fetch_datapoints_object_time_series_query_string(
-                query_expression_string,
-                cursor
-            )
-            query_results = self.honeycomb_client.query.query(query_string, variables={})
-            count = query_results.get('findDatapoints').get('page_info').get('count')
-            cursor = query_results.get('findDatapoints').get('page_info').get('cursor')
-            if cursor is None or count == 0:
-                break
-            chunk_datapoints = query_results.get('findDatapoints').get('data')
-            first_timestamp = chunk_datapoints[0].get('timestamp')
-            last_timestamp = chunk_datapoints[-1].get('timestamp')
-            datapoints_added = 0
-            for datapoint in chunk_datapoints:
-                data_id = datapoint.get('data_id')
-                if data_id not in data_ids:
-                    data_ids.add(data_id)
-                    datapoints.append(datapoint)
-                    datapoints_added +=1
-            logger.info('Chunk {}: fetched {} results from {} to {} containing {} new datapoints'.format(
-                chunk_counter,
-                count,
-                first_timestamp,
-                last_timestamp,
-                datapoints_added
-            ))
-            chunk_counter += 1
-        return datapoints
+        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+        # if not self.time_series_database or not self.object_database:
+        #     raise ValueError('Fetching datapoints by time interval and/or object ID only enabled for object time series databases')
+        # assignment_ids = self._fetch_assignment_ids_object_time_series(
+        #     start_time,
+        #     end_time,
+        #     object_ids
+        # )
+        # if len(assignment_ids) == 0:
+        #     return []
+        # query_expression_string = self._combined_query_expression_string(
+        #     assignment_ids,
+        #     start_time,
+        #     end_time
+        # )
+        # datapoints = []
+        # chunk_counter = 1
+        # data_ids = set()
+        # cursor = None
+        # while True:
+        #     query_string = self._fetch_datapoints_object_time_series_query_string(
+        #         query_expression_string,
+        #         cursor
+        #     )
+        #     query_results = self.honeycomb_client.query.query(query_string, variables={})
+        #     count = query_results.get('findDatapoints').get('page_info').get('count')
+        #     cursor = query_results.get('findDatapoints').get('page_info').get('cursor')
+        #     if cursor is None or count == 0:
+        #         break
+        #     chunk_datapoints = query_results.get('findDatapoints').get('data')
+        #     first_timestamp = chunk_datapoints[0].get('timestamp')
+        #     last_timestamp = chunk_datapoints[-1].get('timestamp')
+        #     datapoints_added = 0
+        #     for datapoint in chunk_datapoints:
+        #         data_id = datapoint.get('data_id')
+        #         if data_id not in data_ids:
+        #             data_ids.add(data_id)
+        #             datapoints.append(datapoint)
+        #             datapoints_added +=1
+        #     logger.info('Chunk {}: fetched {} results from {} to {} containing {} new datapoints'.format(
+        #         chunk_counter,
+        #         count,
+        #         first_timestamp,
+        #         last_timestamp,
+        #         datapoints_added
+        #     ))
+        #     chunk_counter += 1
+        # return datapoints
 
     def _datetime_honeycomb_string(self, timestamp):
         datetime_utc = self._python_datetime_utc(timestamp)
@@ -435,50 +464,54 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         value_string=None,
         children_query_expression_string_list=None
     ):
-        query_expression_string = '{'
-        if field_string is not None:
-            query_expression_string += 'field: "{}", '.format(field_string)
-        if operator_string is not None:
-            query_expression_string += 'operator: {}, '.format(operator_string)
-        if value_string is not None:
-            query_expression_string += 'value: "{}"'.format(value_string)
-        if children_query_expression_string_list is not None:
-            query_expression_string += 'children: [{}]'.format(', '.join(children_query_expression_string_list))
-        query_expression_string += '}'
-        return query_expression_string
+        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+        # query_expression_string = '{'
+        # if field_string is not None:
+        #     query_expression_string += 'field: "{}", '.format(field_string)
+        # if operator_string is not None:
+        #     query_expression_string += 'operator: {}, '.format(operator_string)
+        # if value_string is not None:
+        #     query_expression_string += 'value: "{}"'.format(value_string)
+        # if children_query_expression_string_list is not None:
+        #     query_expression_string += 'children: [{}]'.format(', '.join(children_query_expression_string_list))
+        # query_expression_string += '}'
+        # return query_expression_string
 
     def _assignment_ids_query_expression_string(self, assignment_ids):
-        assignment_ids_query_expression_string_list = []
-        for assignment_id in assignment_ids:
-            assigment_id_query_expression_string = self._query_expression_string(
-                field_string='source.source',
-                operator_string='EQ',
-                value_string=assignment_id
-            )
-            assignment_ids_query_expression_string_list.append(assigment_id_query_expression_string)
-        assignment_ids_query_expression_string = self._query_expression_string(
-            operator_string='OR',
-            children_query_expression_string_list=assignment_ids_query_expression_string_list
-        )
-        return assignment_ids_query_expression_string
+        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+        # assignment_ids_query_expression_string_list = []
+        # for assignment_id in assignment_ids:
+        #     assigment_id_query_expression_string = self._query_expression_string(
+        #         field_string='source.source',
+        #         operator_string='EQ',
+        #         value_string=assignment_id
+        #     )
+        #     assignment_ids_query_expression_string_list.append(assigment_id_query_expression_string)
+        # assignment_ids_query_expression_string = self._query_expression_string(
+        #     operator_string='OR',
+        #     children_query_expression_string_list=assignment_ids_query_expression_string_list
+        # )
+        # return assignment_ids_query_expression_string
 
     def _start_time_query_expression_string(self, start_time):
-        start_time_honeycomb_string = self._datetime_honeycomb_string(start_time)
-        start_time_query_expression_string = self._query_expression_string(
-            field_string='timestamp',
-            operator_string='GTE',
-            value_string=start_time_honeycomb_string
-        )
-        return start_time_query_expression_string
+        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+        # start_time_honeycomb_string = self._datetime_honeycomb_string(start_time)
+        # start_time_query_expression_string = self._query_expression_string(
+        #     field_string='timestamp',
+        #     operator_string='GTE',
+        #     value_string=start_time_honeycomb_string
+        # )
+        # return start_time_query_expression_string
 
     def _end_time_query_expression_string(self, end_time):
-        end_time_honeycomb_string = self._datetime_honeycomb_string(end_time)
-        end_time_query_expression_string = self._query_expression_string(
-            field_string='timestamp',
-            operator_string='LTE',
-            value_string=end_time_honeycomb_string
-        )
-        return end_time_query_expression_string
+        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+        # end_time_honeycomb_string = self._datetime_honeycomb_string(end_time)
+        # end_time_query_expression_string = self._query_expression_string(
+        #     field_string='timestamp',
+        #     operator_string='LTE',
+        #     value_string=end_time_honeycomb_string
+        # )
+        # return end_time_query_expression_string
 
     def _combined_query_expression_string(
         self,
@@ -486,34 +519,36 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         start_time=None,
         end_time=None
     ):
-        combined_query_expression_string_list = []
-        assignment_ids_string = self._assignment_ids_query_expression_string(assignment_ids)
-        combined_query_expression_string_list.append(assignment_ids_string)
-        if start_time is not None:
-            start_time_string = self._start_time_query_expression_string(start_time)
-            combined_query_expression_string_list.append(start_time_string)
-        if end_time is not None:
-            end_time_string = self._end_time_query_expression_string(end_time)
-            combined_query_expression_string_list.append(end_time_string)
-        combined_query_expression_string = self._query_expression_string(
-            operator_string='AND',
-            children_query_expression_string_list=combined_query_expression_string_list
-        )
-        return combined_query_expression_string
+        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+        # combined_query_expression_string_list = []
+        # assignment_ids_string = self._assignment_ids_query_expression_string(assignment_ids)
+        # combined_query_expression_string_list.append(assignment_ids_string)
+        # if start_time is not None:
+        #     start_time_string = self._start_time_query_expression_string(start_time)
+        #     combined_query_expression_string_list.append(start_time_string)
+        # if end_time is not None:
+        #     end_time_string = self._end_time_query_expression_string(end_time)
+        #     combined_query_expression_string_list.append(end_time_string)
+        # combined_query_expression_string = self._query_expression_string(
+        #     operator_string='AND',
+        #     children_query_expression_string_list=combined_query_expression_string_list
+        # )
+        # return combined_query_expression_string
 
     def _fetch_datapoints_object_time_series_query_string(self, query_expression_string, cursor = None):
-        if cursor is not None:
-            query_string = FETCH_DATA_WITH_CURSOR_TEMPLATE.format(
-                query_expression_string,
-                cursor,
-                str(self.read_chunk_size)
-            )
-        else:
-            query_string = FETCH_DATA_WITHOUT_CURSOR_TEMPLATE.format(
-                query_expression_string,
-                str(self.read_chunk_size)
-            )
-        return query_string
+        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+        # if cursor is not None:
+        #     query_string = FETCH_DATA_WITH_CURSOR_TEMPLATE.format(
+        #         query_expression_string,
+        #         cursor,
+        #         str(self.read_chunk_size)
+        #     )
+        # else:
+        #     query_string = FETCH_DATA_WITHOUT_CURSOR_TEMPLATE.format(
+        #         query_expression_string,
+        #         str(self.read_chunk_size)
+        #     )
+        # return query_string
 
 FETCH_DATA_WITHOUT_CURSOR_TEMPLATE = """
 query fetchDataTimeSeries {{
