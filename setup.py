@@ -6,7 +6,7 @@ VERSION = open(os.path.join(BASEDIR, 'VERSION')).read().strip()
 
 BASE_DEPENDENCIES = [
     'wf-database-connection>=0.1.1',
-    'wildflower-honeycomb-sdk>=0.7.3',
+    'wf-minimal-honeycomb-python>=0.3.0',
     'python-dateutil>=2.8.0'
 ]
 
