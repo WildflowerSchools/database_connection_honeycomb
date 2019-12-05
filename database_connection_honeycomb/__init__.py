@@ -161,7 +161,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                     'value': {
                         'timestamp': timestamp_honeycomb_format,
                         'format': 'application/json',
-                        'type': 'MEASURED',
+                        'source_type': 'MEASURED',
                         'source': assignment_id,
                         'file': {
                             'name': 'datapoint.json',
@@ -216,7 +216,7 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                     'value': {
                         'timestamp': timestamp_honeycomb_format,
                         'format': 'application/json',
-                        'type': 'MEASURED',
+                        'source_type': 'MEASURED',
                         'source': assignment_id,
                         'file': {
                             'name': 'datapoint.json',
