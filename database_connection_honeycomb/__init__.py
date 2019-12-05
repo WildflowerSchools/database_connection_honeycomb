@@ -161,10 +161,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                     'value': {
                         'timestamp': timestamp_honeycomb_format,
                         'format': 'application/json',
-                        'source': {
-                            'type': 'MEASURED',
-                            'source': assignment_id
-                        },
+                        'source_type': 'MEASURED',
+                        'source': assignment_id,
                         'file': {
                             'name': 'datapoint.json',
                             'contentType': 'application/json',
@@ -218,10 +216,8 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                     'value': {
                         'timestamp': timestamp_honeycomb_format,
                         'format': 'application/json',
-                        'source': {
-                            'type': 'MEASURED',
-                            'source': assignment_id
-                        },
+                        'source_type': 'MEASURED',
+                        'source': assignment_id,
                         'file': {
                             'name': 'datapoint.json',
                             'contentType': 'application/json',
@@ -550,85 +546,85 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         #     )
         # return query_string
 
-FETCH_DATA_WITHOUT_CURSOR_TEMPLATE = """
-query fetchDataTimeSeries {{
-    findDatapoints(
-        query: {},
-        page: {{
-            max: {},
-            sort: {{direction: ASC, field: "timestamp"}}
-        }}
-    ) {{
-        data {{
-            data_id
-            timestamp
-            source {{
-                type
-                source {{
-                    ... on Assignment {{
-                        environment {{name}}
-                        assigned {{
-                            ... on Device {{
-                                part_number
-                                tag_id
-                            }}
-                            ... on Person {{name}}
-                        }}
-                    }}
-                }}
-            }}
-            file {{
-                data
-                name
-                contentType
-            }}
-        }}
-        page_info {{
-            count
-            cursor
-        }}
-    }}
-}}
-"""
-
-FETCH_DATA_WITH_CURSOR_TEMPLATE = """
-query fetchDataTimeSeries {{
-    findDatapoints(
-        query: {},
-        page: {{
-            cursor: "{}",
-            max: {},
-            sort: {{direction: ASC, field: "timestamp"}}
-        }}
-    ) {{
-        data {{
-            data_id
-            timestamp
-            source {{
-                type
-                source {{
-                    ... on Assignment {{
-                        environment {{name}}
-                        assigned {{
-                            ... on Device {{
-                                part_number
-                                tag_id
-                            }}
-                            ... on Person {{name}}
-                        }}
-                    }}
-                }}
-            }}
-            file {{
-                data
-                name
-                contentType
-            }}
-        }}
-        page_info {{
-            count
-            cursor
-        }}
-    }}
-}}
-"""
+# FETCH_DATA_WITHOUT_CURSOR_TEMPLATE = """
+# query fetchDataTimeSeries {{
+#     findDatapoints(
+#         query: {},
+#         page: {{
+#             max: {},
+#             sort: {{direction: ASC, field: "timestamp"}}
+#         }}
+#     ) {{
+#         data {{
+#             data_id
+#             timestamp
+#             source {{
+#                 type
+#                 source {{
+#                     ... on Assignment {{
+#                         environment {{name}}
+#                         assigned {{
+#                             ... on Device {{
+#                                 part_number
+#                                 tag_id
+#                             }}
+#                             ... on Person {{name}}
+#                         }}
+#                     }}
+#                 }}
+#             }}
+#             file {{
+#                 data
+#                 name
+#                 contentType
+#             }}
+#         }}
+#         page_info {{
+#             count
+#             cursor
+#         }}
+#     }}
+# }}
+# """
+#
+# FETCH_DATA_WITH_CURSOR_TEMPLATE = """
+# query fetchDataTimeSeries {{
+#     findDatapoints(
+#         query: {},
+#         page: {{
+#             cursor: "{}",
+#             max: {},
+#             sort: {{direction: ASC, field: "timestamp"}}
+#         }}
+#     ) {{
+#         data {{
+#             data_id
+#             timestamp
+#             source {{
+#                 type
+#                 source {{
+#                     ... on Assignment {{
+#                         environment {{name}}
+#                         assigned {{
+#                             ... on Device {{
+#                                 part_number
+#                                 tag_id
+#                             }}
+#                             ... on Person {{name}}
+#                         }}
+#                     }}
+#                 }}
+#             }}
+#             file {{
+#                 data
+#                 name
+#                 contentType
+#             }}
+#         }}
+#         page_info {{
+#             count
+#             cursor
+#         }}
+#     }}
+# }}
+# """
