@@ -289,30 +289,6 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             raise ValueError('Received unexpected response from Honeycomb: {}'.format(createDatapoints_result))
         return data_ids
 
-    def _delete_datapoints(self, data_ids):
-        statuses = [self._delete_datapoint(data_id) for data_id in data_ids]
-        return statuses
-
-    def _delete_datapoint(self, data_id):
-        deleteDatapoint_results = self.honeycomb_client.request(
-            request_type='mutation',
-            request_name='deleteDatapoint',
-            arguments={
-                'data_id': {
-                    'type': 'ID',
-                    'value': data_id
-                }
-            },
-            return_object = [
-                'status'
-            ]
-        )
-        try:
-            status = deleteDatapoint_results.get('status')
-        except:
-            raise ValueError('Received unexpected response from Honeycomb')
-        return status
-
     def _lookup_assignment_id_object_time_series(
         self,
         timestamp,
@@ -348,29 +324,6 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             timestamp
         ))
         return None
-
-    def _fetch_assignment_ids_object_time_series(
-        self,
-        start_time=None,
-        end_time=None,
-        object_ids=None
-    ):
-        if not self.time_series_database or not self.object_database or self.environment_name_honeycomb is None:
-            raise ValueError('Assignment ID lookup only enabled for object time series databases with Honeycomb environment specified')
-        relevant_assignment_ids = []
-        for assignment in self.environment.get('assignments'):
-            if assignment.get('assigned_type') != self.object_type_honeycomb:
-                continue
-            if object_ids is not None and assignment.get('assigned').get(self.object_id_field_name_honeycomb) not in object_ids:
-                continue
-            assignment_end = assignment.get('end')
-            if start_time is not None and assignment_end is not None and self._python_datetime_utc(start_time) > self._python_datetime_utc(assignment_end):
-                continue
-            assignment_start = assignment.get('start')
-            if end_time is not None and assignment_start is not None and self._python_datetime_utc(end_time) < self._python_datetime_utc(assignment_start):
-                continue
-            relevant_assignment_ids.append(assignment.get('assignment_id'))
-        return relevant_assignment_ids
 
     def _fetch_data_ids_object_time_series(
         self,
@@ -449,28 +402,46 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             chunk_counter += 1
         return datapoints
 
-    def _datetime_honeycomb_string(self, timestamp):
-        datetime_utc = self._python_datetime_utc(timestamp)
-        datetime_honeycomb_string = datetime_utc.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-        return datetime_honeycomb_string
-
-    def _query_expression(
+    def _fetch_assignment_ids_object_time_series(
         self,
-        field=None,
-        operator=None,
-        value=None,
-        children_query_expression_list=None
+        start_time=None,
+        end_time=None,
+        object_ids=None
     ):
-        query_expression = dict()
-        if field is not None:
-            query_expression['field'] = field
-        if operator is not None:
-            query_expression['operator'] = operator
-        if value is not None:
-            query_expression['value'] = value
-        if children_query_expression_list is not None:
-            query_expression['children'] = children_query_expression_list
-        return query_expression
+        if not self.time_series_database or not self.object_database or self.environment_name_honeycomb is None:
+            raise ValueError('Assignment ID lookup only enabled for object time series databases with Honeycomb environment specified')
+        relevant_assignment_ids = []
+        for assignment in self.environment.get('assignments'):
+            if assignment.get('assigned_type') != self.object_type_honeycomb:
+                continue
+            if object_ids is not None and assignment.get('assigned').get(self.object_id_field_name_honeycomb) not in object_ids:
+                continue
+            assignment_end = assignment.get('end')
+            if start_time is not None and assignment_end is not None and self._python_datetime_utc(start_time) > self._python_datetime_utc(assignment_end):
+                continue
+            assignment_start = assignment.get('start')
+            if end_time is not None and assignment_start is not None and self._python_datetime_utc(end_time) < self._python_datetime_utc(assignment_start):
+                continue
+            relevant_assignment_ids.append(assignment.get('assignment_id'))
+        return relevant_assignment_ids
+
+    def _combined_query_expression(
+        self,
+        assignment_ids,
+        start_time=None,
+        end_time=None
+    ):
+        combined_query_expression_list = []
+        combined_query_expression_list.append(self._assignment_ids_query_expression(assignment_ids))
+        if start_time is not None:
+            combined_query_expression_list.append(self._start_time_query_expression(start_time))
+        if end_time is not None:
+            combined_query_expression_list.append(self._end_time_query_expression(end_time))
+        combined_query_expression = self._query_expression(
+            operator='AND',
+            children_query_expression_list=combined_query_expression_list
+        )
+        return combined_query_expression
 
     def _assignment_ids_query_expression(self, assignment_ids):
         assignment_ids_query_expression_list = []
@@ -505,23 +476,23 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         )
         return end_time_query_expression
 
-    def _combined_query_expression(
+    def _query_expression(
         self,
-        assignment_ids,
-        start_time=None,
-        end_time=None
+        field=None,
+        operator=None,
+        value=None,
+        children_query_expression_list=None
     ):
-        combined_query_expression_list = []
-        combined_query_expression_list.append(self._assignment_ids_query_expression(assignment_ids))
-        if start_time is not None:
-            combined_query_expression_list.append(self._start_time_query_expression(start_time))
-        if end_time is not None:
-            combined_query_expression_list.append(self._end_time_query_expression(end_time))
-        combined_query_expression = self._query_expression(
-            operator='AND',
-            children_query_expression_list=combined_query_expression_list
-        )
-        return combined_query_expression
+        query_expression = dict()
+        if field is not None:
+            query_expression['field'] = field
+        if operator is not None:
+            query_expression['operator'] = operator
+        if value is not None:
+            query_expression['value'] = value
+        if children_query_expression_list is not None:
+            query_expression['children'] = children_query_expression_list
+        return query_expression
 
     def _fetch_datapoints_arguments(
         self,
@@ -564,6 +535,35 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                 }
             }
         return arguments
+
+    def _delete_datapoints(self, data_ids):
+        statuses = [self._delete_datapoint(data_id) for data_id in data_ids]
+        return statuses
+
+    def _delete_datapoint(self, data_id):
+        deleteDatapoint_results = self.honeycomb_client.request(
+            request_type='mutation',
+            request_name='deleteDatapoint',
+            arguments={
+                'data_id': {
+                    'type': 'ID',
+                    'value': data_id
+                }
+            },
+            return_object = [
+                'status'
+            ]
+        )
+        try:
+            status = deleteDatapoint_results.get('status')
+        except:
+            raise ValueError('Received unexpected response from Honeycomb')
+        return status
+
+    def _datetime_honeycomb_string(self, timestamp):
+        datetime_utc = self._python_datetime_utc(timestamp)
+        datetime_honeycomb_string = datetime_utc.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+        return datetime_honeycomb_string
 
 FETCH_DATA_RETURN_OBJECT = [
     {'data': [
