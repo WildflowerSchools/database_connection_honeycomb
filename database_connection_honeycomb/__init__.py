@@ -194,6 +194,48 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             data_ids.extend(chunk_data_ids)
         return data_ids
 
+    # Internal method for fetching object time series data (Honeycomb-specific)
+    def _fetch_data_object_time_series(
+        self,
+        start_time,
+        end_time,
+        object_ids
+    ):
+        datapoints = self._fetch_datapoints_object_time_series(
+            start_time,
+            end_time,
+            object_ids
+        )
+        data = []
+        for datapoint in datapoints:
+            datum = {}
+            source = datapoint.get('source')
+            datum.update({'timestamp': self._python_datetime_utc(datapoint.get('timestamp'))})
+            datum.update({'environment_name': source.get('environment', {}).get('name')})
+            datum.update({'object_id': source.get('assigned', {}).get(self.object_id_field_name_honeycomb)})
+            data_string = datapoint.get('file', {}).get('data')
+            try:
+                data_dict = json.loads(data_string)
+                datum.update(data_dict)
+            except Exception:
+                pass
+            data.append(datum)
+        return data
+
+    # Internal method for deleting object time series data (Honeycomb-specific)
+    def _delete_data_object_time_series(
+        self,
+        start_time,
+        end_time,
+        object_ids
+    ):
+        data_ids = self._fetch_data_ids_object_time_series(
+            start_time,
+            end_time,
+            object_ids
+        )
+        self._delete_datapoints(data_ids)
+
     # Internal method for writing multiple datapoints of object time series data
     # (Honeycomb-specific)
     def _write_datapoints_object_time_series(
@@ -246,48 +288,6 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         except:
             raise ValueError('Received unexpected response from Honeycomb: {}'.format(createDatapoints_result))
         return data_ids
-
-    # Internal method for fetching object time series data (Honeycomb-specific)
-    def _fetch_data_object_time_series(
-        self,
-        start_time,
-        end_time,
-        object_ids
-    ):
-        datapoints = self._fetch_datapoints_object_time_series(
-            start_time,
-            end_time,
-            object_ids
-        )
-        data = []
-        for datapoint in datapoints:
-            datum = {}
-            source = datapoint.get('source')
-            datum.update({'timestamp': self._python_datetime_utc(datapoint.get('timestamp'))})
-            datum.update({'environment_name': source.get('environment', {}).get('name')})
-            datum.update({'object_id': source.get('assigned', {}).get(self.object_id_field_name_honeycomb)})
-            data_string = datapoint.get('file', {}).get('data')
-            try:
-                data_dict = json.loads(data_string)
-                datum.update(data_dict)
-            except Exception:
-                pass
-            data.append(datum)
-        return data
-
-    # Internal method for deleting object time series data (Honeycomb-specific)
-    def _delete_data_object_time_series(
-        self,
-        start_time,
-        end_time,
-        object_ids
-    ):
-        data_ids = self._fetch_data_ids_object_time_series(
-            start_time,
-            end_time,
-            object_ids
-        )
-        self._delete_datapoints(data_ids)
 
     def _delete_datapoints(self, data_ids):
         statuses = [self._delete_datapoint(data_id) for data_id in data_ids]
