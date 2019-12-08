@@ -254,27 +254,26 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         end_time,
         object_ids
     ):
-        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
-        # datapoints = self._fetch_datapoints_object_time_series(
-        #     start_time,
-        #     end_time,
-        #     object_ids
-        # )
-        # data = []
-        # for datapoint in datapoints:
-        #     datum = {}
-        #     source = datapoint.get('source', {}).get('source', {})
-        #     datum.update({'timestamp': self._python_datetime_utc(datapoint.get('timestamp'))})
-        #     datum.update({'environment_name': source.get('environment', {}).get('name')})
-        #     datum.update({'object_id': source.get('assigned', {}).get(self.object_id_field_name_honeycomb)})
-        #     data_string = datapoint.get('file', {}).get('data')
-        #     try:
-        #         data_dict = json.loads(data_string)
-        #         datum.update(data_dict)
-        #     except Exception:
-        #         pass
-        #     data.append(datum)
-        # return data
+        datapoints = self._fetch_datapoints_object_time_series(
+            start_time,
+            end_time,
+            object_ids
+        )
+        data = []
+        for datapoint in datapoints:
+            datum = {}
+            source = datapoint.get('source')
+            datum.update({'timestamp': self._python_datetime_utc(datapoint.get('timestamp'))})
+            datum.update({'environment_name': source.get('environment', {}).get('name')})
+            datum.update({'object_id': source.get('assigned', {}).get(self.object_id_field_name_honeycomb)})
+            data_string = datapoint.get('file', {}).get('data')
+            try:
+                data_dict = json.loads(data_string)
+                datum.update(data_dict)
+            except Exception:
+                pass
+            data.append(datum)
+        return data
 
     # Internal method for deleting object time series data (Honeycomb-specific)
     def _delete_data_object_time_series(
@@ -283,13 +282,12 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         end_time,
         object_ids
     ):
-        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
-        # data_ids = self._fetch_data_ids_object_time_series(
-        #     start_time,
-        #     end_time,
-        #     object_ids
-        # )
-        # self._delete_datapoints(data_ids)
+        data_ids = self._fetch_data_ids_object_time_series(
+            start_time,
+            end_time,
+            object_ids
+        )
+        self._delete_datapoints(data_ids)
 
     def _delete_datapoints(self, data_ids):
         statuses = [self._delete_datapoint(data_id) for data_id in data_ids]
@@ -380,18 +378,17 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         end_time=None,
         object_ids=None
     ):
-        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
-        # if not self.time_series_database or not self.object_database:
-        #     raise ValueError('Fetching data IDs by time interval and/or object ID only enabled for object time series databases')
-        # datapoints = self._fetch_datapoints_object_time_series(
-        #     start_time,
-        #     end_time,
-        #     object_ids
-        # )
-        # data_ids = []
-        # for datapoint in datapoints:
-        #     data_ids.append(datapoint.get('data_id'))
-        # return data_ids
+        if not self.time_series_database or not self.object_database:
+            raise ValueError('Fetching data IDs by time interval and/or object ID only enabled for object time series databases')
+        datapoints = self._fetch_datapoints_object_time_series(
+            start_time,
+            end_time,
+            object_ids
+        )
+        data_ids = []
+        for datapoint in datapoints:
+            data_ids.append(datapoint.get('data_id'))
+        return data_ids
 
     def _fetch_datapoints_object_time_series(
         self,
@@ -399,68 +396,111 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         end_time=None,
         object_ids=None
     ):
-        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
-        # if not self.time_series_database or not self.object_database:
-        #     raise ValueError('Fetching datapoints by time interval and/or object ID only enabled for object time series databases')
-        # assignment_ids = self._fetch_assignment_ids_object_time_series(
-        #     start_time,
-        #     end_time,
-        #     object_ids
-        # )
-        # if len(assignment_ids) == 0:
-        #     return []
+        if not self.time_series_database or not self.object_database:
+            raise ValueError('Fetching datapoints by time interval and/or object ID only enabled for object time series databases')
+        assignment_ids = self._fetch_assignment_ids_object_time_series(
+            start_time,
+            end_time,
+            object_ids
+        )
+        if len(assignment_ids) == 0:
+            return []
+        query_expression = self._combined_query_expression(
+            assignment_ids,
+            start_time,
+            end_time
+        )
         # query_expression_string = self._combined_query_expression_string(
         #     assignment_ids,
         #     start_time,
         #     end_time
         # )
-        # datapoints = []
-        # chunk_counter = 1
-        # data_ids = set()
-        # cursor = None
-        # while True:
-        #     query_string = self._fetch_datapoints_object_time_series_query_string(
-        #         query_expression_string,
-        #         cursor
-        #     )
-        #     query_results = self.honeycomb_client.query.query(query_string, variables={})
-        #     count = query_results.get('findDatapoints').get('page_info').get('count')
-        #     cursor = query_results.get('findDatapoints').get('page_info').get('cursor')
-        #     if cursor is None or count == 0:
-        #         break
-        #     chunk_datapoints = query_results.get('findDatapoints').get('data')
-        #     first_timestamp = chunk_datapoints[0].get('timestamp')
-        #     last_timestamp = chunk_datapoints[-1].get('timestamp')
-        #     datapoints_added = 0
-        #     for datapoint in chunk_datapoints:
-        #         data_id = datapoint.get('data_id')
-        #         if data_id not in data_ids:
-        #             data_ids.add(data_id)
-        #             datapoints.append(datapoint)
-        #             datapoints_added +=1
-        #     logger.info('Chunk {}: fetched {} results from {} to {} containing {} new datapoints'.format(
-        #         chunk_counter,
-        #         count,
-        #         first_timestamp,
-        #         last_timestamp,
-        #         datapoints_added
-        #     ))
-        #     chunk_counter += 1
-        # return datapoints
+        datapoints = []
+        chunk_counter = 1
+        data_ids = set()
+        cursor = None
+        while True:
+            arguments = self._fetch_datapoints_arguments(
+                query_expression,
+                cursor
+            )
+            searchDatapoints_string = self.honeycomb_client.request_string(
+                request_type='query',
+                request_name='searchDatapoints',
+                arguments=arguments,
+                return_object=FETCH_DATA_RETURN_OBJECT
+            )
+            # print(searchDatapoints_string)
+            # print(arguments)
+            searchDatapoints_result = self.honeycomb_client.request(
+                request_type='query',
+                request_name='searchDatapoints',
+                arguments=arguments,
+                return_object=FETCH_DATA_RETURN_OBJECT
+            )
+            # query_string = self._fetch_datapoints_object_time_series_query_string(
+            #     query_expression_string,
+            #     cursor
+            # )
+            # query_results = self.honeycomb_client.query.query(query_string, variables={})
+            count = searchDatapoints_result.get('page_info').get('count')
+            cursor = searchDatapoints_result.get('page_info').get('cursor')
+            # count = query_results.get('findDatapoints').get('page_info').get('count')
+            # cursor = query_results.get('findDatapoints').get('page_info').get('cursor')
+            if cursor is None or count == 0:
+                break
+            chunk_datapoints = searchDatapoints_result.get('data')
+            # chunk_datapoints = query_results.get('findDatapoints').get('data')
+            first_timestamp = chunk_datapoints[0].get('timestamp')
+            last_timestamp = chunk_datapoints[-1].get('timestamp')
+            datapoints_added = 0
+            for datapoint in chunk_datapoints:
+                data_id = datapoint.get('data_id')
+                if data_id not in data_ids:
+                    data_ids.add(data_id)
+                    datapoints.append(datapoint)
+                    datapoints_added +=1
+            logger.info('Chunk {}: fetched {} results from {} to {} containing {} new datapoints'.format(
+                chunk_counter,
+                count,
+                first_timestamp,
+                last_timestamp,
+                datapoints_added
+            ))
+            chunk_counter += 1
+        return datapoints
 
     def _datetime_honeycomb_string(self, timestamp):
         datetime_utc = self._python_datetime_utc(timestamp)
         datetime_honeycomb_string = datetime_utc.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
         return datetime_honeycomb_string
 
-    def _query_expression_string(
+    def _query_expression(
         self,
-        field_string=None,
-        operator_string=None,
-        value_string=None,
-        children_query_expression_string_list=None
+        field=None,
+        operator=None,
+        value=None,
+        children_query_expression_list=None
     ):
-        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+        query_expression = dict()
+        if field is not None:
+            query_expression['field'] = field
+        if operator is not None:
+            query_expression['operator'] = operator
+        if value is not None:
+            query_expression['value'] = value
+        if children_query_expression_list is not None:
+            query_expression['children'] = children_query_expression_list
+        return query_expression
+
+    # def _query_expression_string(
+    #     self,
+    #     field_string=None,
+    #     operator_string=None,
+    #     value_string=None,
+    #     children_query_expression_string_list=None
+    # ):
+    #     raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
         # query_expression_string = '{'
         # if field_string is not None:
         #     query_expression_string += 'field: "{}", '.format(field_string)
@@ -473,8 +513,23 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         # query_expression_string += '}'
         # return query_expression_string
 
-    def _assignment_ids_query_expression_string(self, assignment_ids):
-        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+    def _assignment_ids_query_expression(self, assignment_ids):
+        assignment_ids_query_expression_list = []
+        for assignment_id in assignment_ids:
+            assigment_id_query_expression = self._query_expression(
+                field='source',
+                operator='EQ',
+                value=assignment_id
+            )
+            assignment_ids_query_expression_list.append(assigment_id_query_expression)
+        assignment_ids_query_expression = self._query_expression(
+            operator='OR',
+            children_query_expression_list=assignment_ids_query_expression_list
+        )
+        return assignment_ids_query_expression
+
+    # def _assignment_ids_query_expression_string(self, assignment_ids):
+    #     raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
         # assignment_ids_query_expression_string_list = []
         # for assignment_id in assignment_ids:
         #     assigment_id_query_expression_string = self._query_expression_string(
@@ -489,8 +544,17 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         # )
         # return assignment_ids_query_expression_string
 
-    def _start_time_query_expression_string(self, start_time):
-        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+    def _start_time_query_expression(self, start_time):
+        start_time_honeycomb_string = self._datetime_honeycomb_string(start_time)
+        start_time_query_expression = self._query_expression(
+            field='timestamp',
+            operator='GTE',
+            value=start_time_honeycomb_string
+        )
+        return start_time_query_expression
+
+    # def _start_time_query_expression_string(self, start_time):
+        # raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
         # start_time_honeycomb_string = self._datetime_honeycomb_string(start_time)
         # start_time_query_expression_string = self._query_expression_string(
         #     field_string='timestamp',
@@ -499,8 +563,17 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         # )
         # return start_time_query_expression_string
 
-    def _end_time_query_expression_string(self, end_time):
-        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+    def _end_time_query_expression(self, end_time):
+        end_time_honeycomb_string = self._datetime_honeycomb_string(end_time)
+        end_time_query_expression = self._query_expression(
+            field='timestamp',
+            operator='LTE',
+            value=end_time_honeycomb_string
+        )
+        return end_time_query_expression
+
+    # def _end_time_query_expression_string(self, end_time):
+    #     raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
         # end_time_honeycomb_string = self._datetime_honeycomb_string(end_time)
         # end_time_query_expression_string = self._query_expression_string(
         #     field_string='timestamp',
@@ -509,13 +582,32 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         # )
         # return end_time_query_expression_string
 
-    def _combined_query_expression_string(
+    def _combined_query_expression(
         self,
         assignment_ids,
         start_time=None,
         end_time=None
     ):
-        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+        combined_query_expression_list = []
+        combined_query_expression_list.append(self._assignment_ids_query_expression(assignment_ids))
+        if start_time is not None:
+            combined_query_expression_list.append(self._start_time_query_expression(start_time))
+        if end_time is not None:
+            combined_query_expression_list.append(self._end_time_query_expression(end_time))
+        combined_query_expression = self._query_expression(
+            operator='AND',
+            children_query_expression_list=combined_query_expression_list
+        )
+        return combined_query_expression
+
+
+    # def _combined_query_expression_string(
+    #     self,
+    #     assignment_ids,
+    #     start_time=None,
+    #     end_time=None
+    # ):
+    #     raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
         # combined_query_expression_string_list = []
         # assignment_ids_string = self._assignment_ids_query_expression_string(assignment_ids)
         # combined_query_expression_string_list.append(assignment_ids_string)
@@ -531,8 +623,50 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         # )
         # return combined_query_expression_string
 
-    def _fetch_datapoints_object_time_series_query_string(self, query_expression_string, cursor = None):
-        raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
+    def _fetch_datapoints_arguments(
+        self,
+        query_expression,
+        cursor = None
+    ):
+        if cursor is not None:
+            arguments = {
+                'query': {
+                    'type': 'QueryExpression!',
+                    'value': query_expression
+                },
+                'page': {
+                    'type': 'PaginationInput',
+                    'value': {
+                        'cursor': cursor,
+                        'max': self.read_chunk_size,
+                        'sort': {
+                            'direction': 'ASC',
+                            'field': 'timestamp'
+                        }
+                    }
+                }
+            }
+        else:
+            arguments = {
+                'query': {
+                    'type': 'QueryExpression!',
+                    'value': query_expression
+                },
+                'page': {
+                    'type': 'PaginationInput',
+                    'value': {
+                        'max': self.read_chunk_size,
+                        'sort': {
+                            'direction': 'ASC',
+                            'field': 'timestamp'
+                        }
+                    }
+                }
+            }
+        return arguments
+
+    # def _fetch_datapoints_object_time_series_query_string(self, query_expression_string, cursor = None):
+    #     raise NotImplementedError('This method not yet ported to the new (minimal) SDK')
         # if cursor is not None:
         #     query_string = FETCH_DATA_WITH_CURSOR_TEMPLATE.format(
         #         query_expression_string,
@@ -545,6 +679,38 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         #         str(self.read_chunk_size)
         #     )
         # return query_string
+
+FETCH_DATA_RETURN_OBJECT = [
+    {'data': [
+        'data_id',
+        'timestamp',
+        {'source': [
+            {'... on Assignment': [
+                {'environment': [
+                    'name'
+                ]},
+                {'assigned': [
+                    {'... on Device': [
+                        'part_number',
+                        'tag_id'
+                    ]},
+                    {'... on Person': [
+                        'name'
+                    ]}
+                ]}
+            ]}
+        ]},
+        {'file': [
+            'data',
+            'name',
+            'contentType'
+        ]}
+    ]},
+    {'page_info': [
+        'count',
+        'cursor'
+    ]}
+]
 
 # FETCH_DATA_WITHOUT_CURSOR_TEMPLATE = """
 # query fetchDataTimeSeries {{
