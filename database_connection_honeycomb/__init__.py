@@ -201,26 +201,63 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
         end_time,
         object_ids
     ):
+        logger.info('Fetching datapoints between {} and {}'.format(
+            start_time,
+            end_time
+        ))
         datapoints = self._fetch_datapoints_object_time_series(
             start_time,
             end_time,
             object_ids
         )
-        data = []
+        logger.info('Parsing {} datapoints'.format(len(datapoints)))
+        data=[]
         for datapoint in datapoints:
-            datum = {}
             source = datapoint.get('source')
-            datum.update({'timestamp': self._python_datetime_utc(datapoint.get('timestamp'))})
-            datum.update({'environment_name': source.get('environment', {}).get('name')})
-            datum.update({'object_id': source.get('assigned', {}).get(self.object_id_field_name_honeycomb)})
-            data_string = datapoint.get('file', {}).get('data')
-            try:
-                data_dict = json.loads(data_string)
-                datum.update(data_dict)
-            except Exception:
-                pass
-            data.append(datum)
+            timestamp = self._python_datetime_utc(datapoint.get('timestamp'))
+            environment_name = source.get('environment', {}).get('name')
+            object_id = source.get('assigned', {}).get(self.object_id_field_name_honeycomb)
+            base_data_dict = {
+                'timestamp': timestamp,
+                'environment_name': environment_name,
+                'object_id': object_id
+            }
+            data_blob = datapoint.get('file', {}).get('data')
+            extracted_data_dict_list = self.parse_data_blob(data_blob)
+            for extracted_data_dict in extracted_data_dict_list:
+                for key, value in extracted_data_dict.items():
+                    if key in base_data_dict.keys():
+                        extracted_data_dict[key + '_secondary'] = extracted_data_dict.pop(key)
+                complete_data_dict = {**base_data_dict, **extracted_data_dict}
+                data.append(complete_data_dict)
         return data
+
+    # Internal method for parsing a data blob from Honeycomb into a list of dictionaries
+    def parse_data_blob(
+        self,
+        data_blob
+    ):
+        data_dict_list=[]
+        if isinstance(data_blob, dict):
+            data_dict_list.append(data_blob)
+            return data_dict_list
+        if isinstance(data_blob, list):
+            for item in data_blob:
+                data_dict_list.extend(self.parse_data_blob(item))
+            return data_dict_list
+        try:
+            data_dict_list.extend(self.parse_data_blob(json.loads(data_blob)))
+            return data_dict_list
+        except:
+            pass
+        try:
+            for line in data_blob.split('\n'):
+                if len(line) > 0:
+                    data_dict_list.extend(self.parse_data_blob(line))
+            return data_dict_list
+        except:
+            pass
+        return data_dict_list
 
     # Internal method for deleting object time series data (Honeycomb-specific)
     def _delete_data_object_time_series(
