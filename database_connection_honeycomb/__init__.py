@@ -125,15 +125,33 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                         {'assigned': [
                             {'... on Device': [
                                 'device_id',
+                                'device_type',
                                 'part_number',
-                                'name',
                                 'serial_number',
+                                'name',
                                 'mac_address',
                                 'tag_id'
                             ]},
                             {'... on Person': [
                                 'person_id',
-                                'name'
+                                'name',
+                                'first_name',
+                                'last_name',
+                                'nickname',
+                                'short_name',
+                                'person_type',
+                                'transparent_classroom_id'
+                            ]},
+                            {'... on Material': [
+                                'material_id',
+                                'name',
+                                'transparent_classroom_id'
+                            ]},
+                            {'... on Tray': [
+                                'tray_id',
+                                'part_number',
+                                'name',
+                                'serial_number'
                             ]}
                         ]}
                     ]}
