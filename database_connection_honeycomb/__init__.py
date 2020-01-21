@@ -243,10 +243,13 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
             data_blob = datapoint.get('file', {}).get('data')
             extracted_data_dict_list = self.parse_data_blob(data_blob)
             for extracted_data_dict in extracted_data_dict_list:
+                sanitized_extracted_data_dict = dict()
                 for key, value in extracted_data_dict.items():
                     if key in base_data_dict.keys():
-                        extracted_data_dict[key + '_secondary'] = extracted_data_dict.pop(key)
-                complete_data_dict = {**base_data_dict, **extracted_data_dict}
+                        sanitized_extracted_data_dict[key + '_secondary'] = extracted_data_dict[key]
+                    else:
+                        sanitized_extracted_data_dict[key] = extracted_data_dict[key]
+                complete_data_dict = {**base_data_dict, **sanitized_extracted_data_dict}
                 data.append(complete_data_dict)
         return data
 
