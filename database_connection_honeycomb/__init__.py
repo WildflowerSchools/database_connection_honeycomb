@@ -568,10 +568,16 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                     'value': {
                         'cursor': cursor,
                         'max': self.read_chunk_size,
-                        'sort': {
-                            'direction': 'ASC',
-                            'field': 'timestamp'
-                        }
+                        'sort': [
+                            {
+                                'direction': 'ASC',
+                                'field': 'timestamp'
+                            },
+                            {
+                                'direction': 'ASC',
+                                'field': 'data_id'
+                            },
+                        ]
                     }
                 }
             }
@@ -585,10 +591,16 @@ class DatabaseConnectionHoneycomb(DatabaseConnection):
                     'type': 'PaginationInput',
                     'value': {
                         'max': self.read_chunk_size,
-                        'sort': {
-                            'direction': 'ASC',
-                            'field': 'timestamp'
-                        }
+                        'sort': [
+                            {
+                                'direction': 'ASC',
+                                'field': 'timestamp'
+                            },
+                            {
+                                'direction': 'ASC',
+                                'field': 'data_id'
+                            },
+                        ]
                     }
                 }
             }
